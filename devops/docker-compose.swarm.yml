@@ -1,0 +1,40 @@
+# Stack Docker Swarm pour IA Friendly
+# Déploiement derrière Traefik v3 + Coraza WAF (réseau proxy)
+# Build: depuis devops/ → docker compose -f docker-compose.swarm.yml build
+# Déploiement: selon procédure homelab (stack deploy avec ce fichier)
+
+version: "3.9"
+
+services:
+  ia-friendly:
+    image: registry.methodinfo.fr/ia-friendly:latest
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    networks:
+      - proxy
+    deploy:
+      replicas: 1
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.services.ia-friendly.loadbalancer.server.port=3000"
+        # Router HTTPS (principal) — middleware global obligatoire (WAF, headers, rate limit)
+        - "traefik.http.routers.ia-friendly.rule=Host(`${TRAEFIK_HOST}`)"
+        - "traefik.http.routers.ia-friendly.entrypoints=websecure"
+        - "traefik.http.routers.ia-friendly.tls.certresolver=letsencrypt"
+        - "traefik.http.routers.ia-friendly.middlewares=global@file"
+        - "traefik.http.routers.ia-friendly.service=ia-friendly"
+        # Router HTTP (redirection vers HTTPS)
+        - "traefik.http.routers.ia-friendly-http.rule=Host(`${TRAEFIK_HOST}`)"
+        - "traefik.http.routers.ia-friendly-http.entrypoints=web"
+        - "traefik.http.routers.ia-friendly-http.middlewares=redirect-to-https@file"
+        - "traefik.http.routers.ia-friendly-http.service=noop@internal"
+      restart_policy:
+        condition: on-failure
+      placement:
+        constraints:
+          - node.labels.gpu != true
+
+networks:
+  proxy:
+    external: true
