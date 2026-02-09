@@ -8,7 +8,7 @@ interface ShareSectionProps {
 }
 
 const SHARE_TEXT = (score: number, url: string) =>
-  `Mon site ${url} a obtenu ${score}/10 sur IA Friendly — Vérifiez si votre site est lisible par l'IA !`;
+  `Mon site ${url} a obtenu ${score}/10 sur Method AI — Vérifiez si votre site est lisible par l'IA !`;
 
 export function ShareSection({ result }: ShareSectionProps) {
   const [copied, setCopied] = useState(false);
@@ -34,7 +34,7 @@ export function ShareSection({ result }: ShareSectionProps) {
   function handleShareNative() {
     if (typeof navigator !== "undefined" && navigator.share) {
       navigator.share({
-        title: "IA Friendly — Résultat d'analyse",
+        title: "Method AI — Résultat d'analyse",
         text,
         url: shareUrl,
       }).catch(() => {});
@@ -48,62 +48,64 @@ export function ShareSection({ result }: ShareSectionProps) {
   const facebookUrl = shareUrl ? `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}` : "#";
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <span className="text-sm text-slate-600 dark:text-slate-400 mr-1">
-        Partager :
+    <div className="flex flex-wrap items-center gap-3">
+      <span className="text-sm text-luxe-fg-muted">
+        Partager
       </span>
-      <a
-        href={twitterUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-slate-200 dark:bg-slate-700 hover:bg-sky-500 hover:text-white text-slate-700 dark:text-slate-300 transition-colors"
-        aria-label="Partager sur X (Twitter)"
-      >
-        <XIcon />
-      </a>
-      <a
-        href={linkedInUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-slate-200 dark:bg-slate-700 hover:bg-[#0A66C2] hover:text-white text-slate-700 dark:text-slate-300 transition-colors"
-        aria-label="Partager sur LinkedIn"
-      >
-        <LinkedInIcon />
-      </a>
-      <a
-        href={facebookUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-slate-200 dark:bg-slate-700 hover:bg-[#1877F2] hover:text-white text-slate-700 dark:text-slate-300 transition-colors"
-        aria-label="Partager sur Facebook"
-      >
-        <FacebookIcon />
-      </a>
-      {canNativeShare && (
+      <div className="flex items-center gap-1.5">
+        <a
+          href={twitterUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center justify-center w-10 h-10 rounded-lg border border-luxe-border bg-luxe-bg-muted hover:border-luxe-gold hover:bg-[rgba(34,211,238,0.08)] text-luxe-fg-muted hover:text-luxe-gold transition-all duration-200"
+          aria-label="Partager sur X (Twitter)"
+        >
+          <XIcon />
+        </a>
+        <a
+          href={linkedInUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center justify-center w-10 h-10 rounded-lg border border-luxe-border bg-luxe-bg-muted hover:border-luxe-gold hover:bg-[rgba(34,211,238,0.08)] text-luxe-fg-muted hover:text-luxe-gold transition-all duration-200"
+          aria-label="Partager sur LinkedIn"
+        >
+          <LinkedInIcon />
+        </a>
+        <a
+          href={facebookUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center justify-center w-10 h-10 rounded-lg border border-luxe-border bg-luxe-bg-muted hover:border-luxe-gold hover:bg-[rgba(34,211,238,0.08)] text-luxe-fg-muted hover:text-luxe-gold transition-all duration-200"
+          aria-label="Partager sur Facebook"
+        >
+          <FacebookIcon />
+        </a>
+        {canNativeShare && (
+          <button
+            type="button"
+            onClick={handleShareNative}
+            className="inline-flex items-center justify-center w-10 h-10 rounded-lg border border-luxe-border bg-luxe-bg-muted hover:border-luxe-gold hover:bg-[rgba(34,211,238,0.08)] text-luxe-fg-muted hover:text-luxe-gold transition-all duration-200"
+            aria-label="Partager (menu natif)"
+          >
+            <ShareIcon />
+          </button>
+        )}
         <button
           type="button"
-          onClick={handleShareNative}
-          className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-slate-200 dark:bg-slate-700 hover:bg-slate-600 hover:text-white text-slate-700 dark:text-slate-300 transition-colors"
-          aria-label="Partager (menu natif)"
+          onClick={handleCopyLink}
+          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border border-luxe-border bg-luxe-bg-muted hover:border-luxe-gold hover:bg-[rgba(34,211,238,0.08)] text-luxe-fg-muted hover:text-luxe-gold text-sm transition-all duration-200"
+          aria-label="Copier le lien"
         >
-          <ShareIcon />
+          {copied ? (
+            <CheckIcon />
+          ) : (
+            <LinkIcon />
+          )}
+          <span className="sr-only sm:not-sr-only">
+            {copied ? "Copié" : "Copier"}
+          </span>
         </button>
-      )}
-      <button
-        type="button"
-        onClick={handleCopyLink}
-        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-200 dark:bg-slate-700 hover:bg-slate-600 hover:text-white text-slate-700 dark:text-slate-300 text-sm transition-colors"
-        aria-label="Copier le lien"
-      >
-        {copied ? (
-          <CheckIcon />
-        ) : (
-          <LinkIcon />
-        )}
-        <span className="sr-only sm:not-sr-only">
-          {copied ? "Copié !" : "Copier le lien"}
-        </span>
-      </button>
+      </div>
     </div>
   );
 }

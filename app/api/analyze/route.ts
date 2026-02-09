@@ -1,15 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import * as cheerio from "cheerio";
 import type { AnalysisResult, Improvement, AIPreviewContent } from "@/lib/types";
+import { validateAndNormalizeUrl, isUrlSafeForFetch } from "@/lib/urlSecurity";
+import { checkRateLimit } from "@/lib/rateLimit";
 
-function isValidUrl(s: string): boolean {
-  try {
-    const u = new URL(s);
-    return u.protocol === "http:" || u.protocol === "https:";
-  } catch {
-    return false;
-  }
-}
+const MAX_HTML_BYTES = 5 * 1024 * 1024; // 5 Mo max
+const FETCH_TIMEOUT_MS = 15000;
 
 function stripHtml(html: string): string {
   return html
@@ -55,28 +51,87 @@ function buildAiPreviewYaml(preview: AIPreviewContent): string {
   return lines.join("\n");
 }
 
+function safeJsonBody(request: NextRequest): Promise<unknown> {
+  const ct = request.headers.get("content-type") ?? "";
+  if (!ct.includes("application/json")) {
+    throw new Error("CONTENT_TYPE");
+  }
+  return request.json();
+}
+
 export async function POST(request: NextRequest) {
+  const rateLimit = checkRateLimit(request);
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      {
+        error: "Trop de requêtes. Réessayez dans quelques instants.",
+      },
+      {
+        status: 429,
+        headers: {
+          "Retry-After": String(rateLimit.retryAfterSeconds),
+        },
+      }
+    );
+  }
+
   try {
-    const body = await request.json();
-    const url = typeof body?.url === "string" ? body.url.trim() : "";
-    if (!url || !isValidUrl(url)) {
+    let body: unknown;
+    try {
+      body = await safeJsonBody(request);
+    } catch (e) {
+      const msg = (e as Error).message;
+      if (msg === "CONTENT_TYPE") {
+        return NextResponse.json(
+          { error: "Content-Type doit être application/json." },
+          { status: 415 }
+        );
+      }
       return NextResponse.json(
-        { error: "URL invalide. Utilisez une URL complète (ex: https://example.com)." },
+        { error: "Corps de requête JSON invalide." },
         { status: 400 }
       );
     }
 
+    if (body === null || typeof body !== "object" || Array.isArray(body)) {
+      return NextResponse.json(
+        { error: "Un objet avec une propriété 'url' est attendu." },
+        { status: 400 }
+      );
+    }
+
+    const urlInput = typeof (body as { url?: unknown }).url === "string" ? (body as { url: string }).url : "";
+    const validation = validateAndNormalizeUrl(urlInput);
+    if (!validation.ok) {
+      return NextResponse.json(
+        { error: validation.error },
+        { status: 400 }
+      );
+    }
+
+    const url = validation.url.href;
+
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
-    const res = await fetch(url, {
-      signal: controller.signal,
-      headers: {
-        "User-Agent":
-          "IAFriendly/1.0 (Analysis; +https://ia-friendly.vercel.app)",
-      },
-      redirect: "follow",
-    });
-    clearTimeout(timeout);
+    const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        signal: controller.signal,
+        headers: {
+          "User-Agent": "IAFriendly/1.0 (Analysis; +https://ia-friendly.vercel.app)",
+        },
+        redirect: "follow",
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    if (!isUrlSafeForFetch(res.url)) {
+      return NextResponse.json(
+        { error: "Impossible d'analyser cette URL." },
+        { status: 422 }
+      );
+    }
 
     if (!res.ok) {
       return NextResponse.json(
@@ -85,8 +140,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const html = await res.text();
-    const $ = cheerio.load(html);
+    const contentType = res.headers.get("content-type") ?? "";
+    if (!contentType.includes("text/html") && !contentType.includes("application/xhtml")) {
+      return NextResponse.json(
+        { error: "La réponse n'est pas une page HTML." },
+        { status: 422 }
+      );
+    }
+
+    const rawHtml = await res.text();
+    if (rawHtml.length > MAX_HTML_BYTES) {
+      return NextResponse.json(
+        { error: "La page est trop volumineuse pour être analysée." },
+        { status: 422 }
+      );
+    }
+
+    const $ = cheerio.load(rawHtml);
 
     const improvements: Improvement[] = [];
     let score = 10;
@@ -258,16 +328,12 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(result);
   } catch (err) {
-    const message =
-      err instanceof Error ? err.message : "Erreur lors de l'analyse.";
-    const isAbort = message.includes("abort") || (err as { name?: string }).name === "AbortError";
-    return NextResponse.json(
-      {
-        error: isAbort
-          ? "La requête a expiré. Le site est peut-être trop lent."
-          : `Impossible d'analyser l'URL: ${message}`,
-      },
-      { status: 500 }
-    );
+    const isAbort =
+      (err as { name?: string }).name === "AbortError" ||
+      (err instanceof Error && err.message.includes("abort"));
+    const safeMessage = isAbort
+      ? "La requête a expiré. Le site est peut-être trop lent."
+      : "Une erreur est survenue lors de l'analyse. Réessayez plus tard.";
+    return NextResponse.json({ error: safeMessage }, { status: 500 });
   }
 }

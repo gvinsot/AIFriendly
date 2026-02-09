@@ -50,120 +50,130 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
-      <header className="border-b border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/80 backdrop-blur">
-        <div className="max-w-4xl mx-auto px-4 py-6">
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
-            IA Friendly
+    <div className="min-h-screen bg-luxe-bg">
+      {/* Subtle gradient overlay for depth */}
+      <div className="fixed inset-0 bg-gradient-to-b from-[rgba(34,211,238,0.06)] via-transparent to-transparent pointer-events-none" aria-hidden />
+      <header className="relative border-b border-luxe-border bg-luxe-bg-elevated/80 backdrop-blur-sm">
+        <div className="max-w-3xl mx-auto px-6 py-8">
+          <h1 className="font-display text-3xl sm:text-4xl font-semibold tracking-tight text-luxe-fg">
+            Method AI
           </h1>
-          <p className="text-slate-600 dark:text-slate-400 mt-1 text-sm">
+          <p className="text-luxe-fg-muted mt-2 text-sm tracking-wide">
             Vérifiez si votre site est lisible et optimisé pour l&apos;IA
           </p>
+          <div className="absolute bottom-0 left-0 w-24 h-px bg-gradient-to-r from-luxe-gold to-transparent" aria-hidden />
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-4 py-8">
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="flex flex-col sm:flex-row gap-3">
+      <main className="relative max-w-3xl mx-auto px-6 py-12">
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <div className="flex flex-col sm:flex-row gap-4">
             <input
               type="url"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               placeholder="https://exemple.com"
-              className="flex-1 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-3 text-slate-900 dark:text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent"
+              className="flex-1 rounded-lg border border-luxe-border bg-luxe-bg-elevated px-5 py-3.5 text-luxe-fg placeholder-luxe-fg-muted/70 focus:outline-none focus:ring-1 focus:ring-luxe-border-focus focus:border-luxe-border-focus transition-colors disabled:opacity-60"
               disabled={loading}
               aria-label="URL à analyser"
             />
             <button
               type="submit"
               disabled={loading}
-              className="rounded-lg bg-sky-600 hover:bg-sky-700 disabled:bg-slate-400 text-white font-medium px-6 py-3 transition-colors focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2"
+              className="rounded-lg border border-luxe-gold bg-luxe-gold/10 text-luxe-gold hover:bg-luxe-gold/20 disabled:opacity-50 disabled:border-luxe-fg-muted/30 disabled:text-luxe-fg-muted font-medium px-8 py-3.5 transition-all duration-200 focus:outline-none focus:ring-1 focus:ring-luxe-gold focus:ring-offset-2 focus:ring-offset-luxe-bg"
             >
-              {loading ? "Analyse en cours…" : "Analyser"}
+              {loading ? (
+                <span className="inline-flex items-center gap-2">
+                  <span className="size-3 rounded-full border-2 border-luxe-gold border-t-transparent animate-spin" aria-hidden />
+                  Analyse…
+                </span>
+              ) : (
+                "Analyser"
+              )}
             </button>
           </div>
           {error && (
-            <p className="text-red-600 dark:text-red-400 text-sm" role="alert">
+            <p className="text-luxe-score-low text-sm" role="alert">
               {error}
             </p>
           )}
         </form>
 
         {result && (
-          <section className="mt-10 space-y-8" aria-labelledby="results-heading">
+          <section className="mt-14 space-y-10" aria-labelledby="results-heading">
             <h2 id="results-heading" className="sr-only">
               Résultats de l&apos;analyse
             </h2>
 
-            <div className="rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
-              <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
-                <h3 className="font-semibold text-slate-900 dark:text-white">
+            <article className="rounded-2xl bg-luxe-bg-elevated border border-luxe-border shadow-luxe overflow-hidden">
+              <div className="px-8 py-5 border-b border-luxe-border bg-luxe-bg-muted/50">
+                <h3 className="font-display text-xl font-semibold text-luxe-fg">
                   Score de lisibilité IA
                 </h3>
-                <p className="text-sm text-slate-600 dark:text-slate-400 mt-0.5">
+                <p className="text-sm text-luxe-fg-muted mt-1 truncate max-w-full" title={result.url}>
                   {result.url}
                 </p>
               </div>
-              <div className="p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div className="p-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6">
                 <div className="flex items-baseline gap-2">
                   <span
-                    className={`text-4xl font-bold tabular-nums ${
+                    className={`font-display text-5xl sm:text-6xl font-semibold tabular-nums tracking-tight ${
                       result.score >= 7
-                        ? "text-emerald-600 dark:text-emerald-400"
+                        ? "text-[var(--luxe-score-high)]"
                         : result.score >= 4
-                        ? "text-amber-600 dark:text-amber-400"
-                        : "text-red-600 dark:text-red-400"
+                        ? "text-[var(--luxe-score-mid)]"
+                        : "text-[var(--luxe-score-low)]"
                     }`}
                   >
                     {result.score}
                   </span>
-                  <span className="text-slate-500 dark:text-slate-400">
+                  <span className="text-luxe-fg-muted text-xl font-medium">
                     / {result.maxScore}
                   </span>
                 </div>
                 <ShareSection result={result} />
               </div>
-            </div>
+            </article>
 
             {result.improvements.length > 0 && (
-              <div className="rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
-                <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
-                  <h3 className="font-semibold text-slate-900 dark:text-white">
+              <article className="rounded-2xl bg-luxe-bg-elevated border border-luxe-border shadow-luxe overflow-hidden">
+                <div className="px-8 py-5 border-b border-luxe-border bg-luxe-bg-muted/50">
+                  <h3 className="font-display text-xl font-semibold text-luxe-fg">
                     Éléments à améliorer
                   </h3>
-                  <p className="text-sm text-slate-600 dark:text-slate-400 mt-0.5">
+                  <p className="text-sm text-luxe-fg-muted mt-1">
                     Ces modifications amélioreront la lisibilité pour les IA
                   </p>
                 </div>
-                <ul className="divide-y divide-slate-200 dark:divide-slate-700">
+                <ul className="divide-y divide-luxe-border">
                   {result.improvements.map((item) => (
                     <ImprovementItem key={item.id} item={item} />
                   ))}
                 </ul>
-              </div>
+              </article>
             )}
 
-            <div className="rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
-              <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
-                <h3 className="font-semibold text-slate-900 dark:text-white">
-                  Aperçu IA (ce que verrait un assistant comme ChatGPT)
+            <article className="rounded-2xl bg-luxe-bg-elevated border border-luxe-border shadow-luxe overflow-hidden">
+              <div className="px-8 py-5 border-b border-luxe-border bg-luxe-bg-muted/50">
+                <h3 className="font-display text-xl font-semibold text-luxe-fg">
+                  Aperçu IA
                 </h3>
-                <p className="text-sm text-slate-600 dark:text-slate-400 mt-0.5">
-                  Représentation structurée du contenu de la page
+                <p className="text-sm text-luxe-fg-muted mt-1">
+                  Ce que verrait un assistant comme ChatGPT — représentation structurée
                 </p>
               </div>
-              <div className="p-4 overflow-auto preview-scroll max-h-[420px] bg-slate-900 rounded-b-xl">
-                <pre className="text-sm font-mono text-slate-300 whitespace-pre">
+              <div className="p-5 overflow-auto preview-scroll max-h-[420px] bg-luxe-bg-muted rounded-b-2xl">
+                <pre className="text-sm font-mono text-luxe-fg-muted whitespace-pre leading-relaxed">
                   {result.aiPreviewYaml}
                 </pre>
               </div>
-            </div>
+            </article>
           </section>
         )}
       </main>
 
-      <footer className="mt-16 py-8 border-t border-slate-200 dark:border-slate-700 text-center text-sm text-slate-500 dark:text-slate-400">
-        IA Friendly — Analyse de lisibilité pour l&apos;IA
+      <footer className="mt-20 py-10 border-t border-luxe-border text-center text-sm text-luxe-fg-muted">
+        Method AI — Analyse de lisibilité pour l&apos;IA
       </footer>
     </div>
   );
@@ -171,15 +181,15 @@ export default function Home() {
 
 function ImprovementItem({ item }: { item: Improvement }) {
   const severityStyles = {
-    critical: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
-    warning: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
-    info: "bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300",
+    critical: "bg-[var(--luxe-score-low)]/15 text-[var(--luxe-score-low)] border border-[var(--luxe-score-low)]/20",
+    warning: "bg-[var(--luxe-score-mid)]/15 text-[var(--luxe-score-mid)] border border-[var(--luxe-score-mid)]/20",
+    info: "bg-luxe-gold/10 text-luxe-gold-muted border border-luxe-border",
   };
   return (
-    <li className="px-6 py-4">
+    <li className="px-8 py-5 transition-colors hover:bg-luxe-bg-muted/30">
       <div className="flex flex-wrap items-center gap-2">
         <span
-          className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${severityStyles[item.severity]}`}
+          className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium tracking-wide ${severityStyles[item.severity]}`}
         >
           {item.severity === "critical"
             ? "Critique"
@@ -187,18 +197,18 @@ function ImprovementItem({ item }: { item: Improvement }) {
             ? "Attention"
             : "Info"}
         </span>
-        <span className="text-xs text-slate-500 dark:text-slate-400">
+        <span className="text-xs text-luxe-fg-muted">
           {item.category}
         </span>
       </div>
-      <h4 className="font-medium text-slate-900 dark:text-white mt-2">
+      <h4 className="font-medium text-luxe-fg mt-3">
         {item.title}
       </h4>
-      <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+      <p className="text-sm text-luxe-fg-muted mt-1.5 leading-relaxed">
         {item.description}
       </p>
       {item.suggestion && (
-        <p className="text-sm text-slate-700 dark:text-slate-300 mt-2 font-mono bg-slate-100 dark:bg-slate-700/50 rounded px-2 py-1.5">
+        <p className="text-sm text-luxe-fg-muted mt-3 font-mono bg-luxe-bg-muted border border-luxe-border rounded-lg px-4 py-2.5">
           {item.suggestion}
         </p>
       )}

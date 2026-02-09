@@ -33,6 +33,35 @@ npm run build
 npm start
 ```
 
+## Docker
+
+Image optimisée multi-stage (standalone Next.js) :
+
+```bash
+docker build -t ia-friendly:latest .
+docker run -p 3000:3000 ia-friendly:latest
+```
+
+## Intégration homelab (Traefik v3 + Coraza WAF)
+
+Le dossier `devops/` permet le déploiement dans l’infrastructure edge (réseau `proxy`, certificats Let’s Encrypt, WAF global).
+
+- **devops/docker-compose.swarm.yml** — Stack Docker Swarm avec labels Traefik (HTTPS, `global@file`, redirect HTTP→HTTPS).
+- **devops/docker-compose.pre.sh** / **docker-compose.post.sh** — Scripts exécutés avant/après le déploiement.
+- **devops/env.example** — Exemple de variables ; copier en `devops/.env` et renseigner `TRAEFIK_HOST` (ex. `ia-friendly.methodinfo.fr`).
+
+Build et image pour la registry :
+
+```bash
+cd devops
+cp env.example .env
+# Éditer .env : TRAEFIK_HOST=ia-friendly.methodinfo.fr
+docker compose -f docker-compose.swarm.yml build
+docker compose -f docker-compose.swarm.yml push
+```
+
+Déploiement en stack : s’assurer que les variables (ex. `TRAEFIK_HOST`) sont exportées ou que le fichier est pré-traité (ex. `docker compose -f docker-compose.swarm.yml config` puis `docker stack deploy -c - ia-friendly`), car `docker stack deploy` ne charge pas `.env` automatiquement.
+
 ## API
 
 - **POST /api/analyze**  

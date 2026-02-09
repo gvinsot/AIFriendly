@@ -1,0 +1,26 @@
+# Dependencies and build
+node_modules
+.next
+out
+
+# Git and IDE
+.git
+.gitignore
+.cursor
+.vscode
+*.md
+!README.md
+
+# Env (ne pas inclure les secrets dans l’image)
+.env
+.env.*
+!.env.example
+
+# Devops (déploiement séparé)
+devops
+
+# Tests et debug
+coverage
+*.log
+npm-debug.log*
+.DS_Store
