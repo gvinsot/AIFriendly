@@ -46,6 +46,56 @@ body {
   }
 }
 
+/* Title gradient animation */
+.title-gradient {
+  background: linear-gradient(
+    135deg,
+    var(--luxe-gold) 0%,
+    #a855f7 25%,
+    var(--luxe-gold) 50%,
+    #a855f7 75%,
+    var(--luxe-gold) 100%
+  );
+  background-size: 200% 200%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: gradient-shift 4s ease infinite;
+}
+
+@keyframes gradient-shift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+.title-glow {
+  text-shadow: 
+    0 0 20px rgba(34, 211, 238, 0.3),
+    0 0 40px rgba(168, 85, 247, 0.2);
+}
+
+@media (prefers-color-scheme: light) {
+  .title-gradient {
+    background: linear-gradient(
+      135deg,
+      #0891b2 0%,
+      #7c3aed 25%,
+      #0891b2 50%,
+      #7c3aed 75%,
+      #0891b2 100%
+    );
+    background-size: 200% 200%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .title-glow {
+    text-shadow: 
+      0 0 20px rgba(8, 145, 178, 0.2),
+      0 0 40px rgba(124, 58, 237, 0.15);
+  }
+}
+
 /* Luxe scrollbar */
 .preview-scroll::-webkit-scrollbar {
   width: 8px;

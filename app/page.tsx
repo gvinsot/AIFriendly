@@ -55,8 +55,9 @@ export default function Home() {
       <div className="fixed inset-0 bg-gradient-to-b from-[rgba(34,211,238,0.06)] via-transparent to-transparent pointer-events-none" aria-hidden />
       <header className="relative border-b border-luxe-border bg-luxe-bg-elevated/80 backdrop-blur-sm">
         <div className="max-w-3xl mx-auto px-6 py-8">
-          <h1 className="font-display text-3xl sm:text-4xl font-semibold tracking-tight text-luxe-fg">
-            Method AI
+          <h1 className="font-display text-3xl sm:text-4xl font-bold tracking-tight">
+            <span className="title-gradient title-glow">AI</span>
+            <span className="text-luxe-fg"> Friendly</span>
           </h1>
           <p className="text-luxe-fg-muted mt-2 text-sm tracking-wide">
             Vérifiez si votre site est lisible et optimisé pour l&apos;IA

@@ -6,8 +6,8 @@
 version: "3.9"
 
 services:
-  ia-friendly:
-    image: registry.methodinfo.fr/ia-friendly:latest
+  ai-friendly:
+    image: registry.methodinfo.fr/ai-friendly:latest
     build:
       context: ..
       dockerfile: Dockerfile
@@ -17,18 +17,18 @@ services:
       replicas: 1
       labels:
         - "traefik.enable=true"
-        - "traefik.http.services.ia-friendly.loadbalancer.server.port=3000"
+        - "traefik.http.services.ai-friendly.loadbalancer.server.port=3000"
         # Router HTTPS (principal) — middleware global obligatoire (WAF, headers, rate limit)
-        - "traefik.http.routers.ia-friendly.rule=Host(`${TRAEFIK_HOST}`)"
-        - "traefik.http.routers.ia-friendly.entrypoints=websecure"
-        - "traefik.http.routers.ia-friendly.tls.certresolver=letsencrypt"
-        - "traefik.http.routers.ia-friendly.middlewares=global@file"
-        - "traefik.http.routers.ia-friendly.service=ia-friendly"
+        - "traefik.http.routers.ai-friendly.rule=Host(`${TRAEFIK_HOST}`)"
+        - "traefik.http.routers.ai-friendly.entrypoints=websecure"
+        - "traefik.http.routers.ai-friendly.tls.certresolver=letsencrypt"
+        - "traefik.http.routers.ai-friendly.middlewares=global@file"
+        - "traefik.http.routers.ai-friendly.service=ai-friendly"
         # Router HTTP (redirection vers HTTPS)
-        - "traefik.http.routers.ia-friendly-http.rule=Host(`${TRAEFIK_HOST}`)"
-        - "traefik.http.routers.ia-friendly-http.entrypoints=web"
-        - "traefik.http.routers.ia-friendly-http.middlewares=redirect-to-https@file"
-        - "traefik.http.routers.ia-friendly-http.service=noop@internal"
+        - "traefik.http.routers.ai-friendly-http.rule=Host(`${TRAEFIK_HOST}`)"
+        - "traefik.http.routers.ai-friendly-http.entrypoints=web"
+        - "traefik.http.routers.ai-friendly-http.middlewares=redirect-to-https@file"
+        - "traefik.http.routers.ai-friendly-http.service=noop@internal"
       restart_policy:
         condition: on-failure
       placement:

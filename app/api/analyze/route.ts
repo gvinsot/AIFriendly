@@ -1,11 +1,120 @@
 import { NextRequest, NextResponse } from "next/server";
 import * as cheerio from "cheerio";
-import type { AnalysisResult, Improvement, AIPreviewContent } from "@/lib/types";
+import type { AnalysisResult, Improvement, AIPreviewContent, BotAccessInfo } from "@/lib/types";
 import { validateAndNormalizeUrl, isUrlSafeForFetch } from "@/lib/urlSecurity";
 import { checkRateLimit } from "@/lib/rateLimit";
 
 const MAX_HTML_BYTES = 5 * 1024 * 1024; // 5 Mo max
 const FETCH_TIMEOUT_MS = 15000;
+
+// AI-specific user agents that might be blocked
+const AI_BOT_AGENTS = [
+  "GPTBot",
+  "ChatGPT-User",
+  "Google-Extended",
+  "CCBot",
+  "anthropic-ai",
+  "Claude-Web",
+  "PerplexityBot",
+  "Bytespider",
+  "Amazonbot",
+  "FacebookBot",
+  "Applebot-Extended",
+];
+
+interface RobotsAnalysis {
+  exists: boolean;
+  blocksAI: string[];
+  allowsAI: string[];
+  hasSitemapReference: boolean;
+}
+
+interface SitemapAnalysis {
+  exists: boolean;
+  url: string | null;
+}
+
+interface LlmsTxtAnalysis {
+  exists: boolean;
+  content: string | null;
+}
+
+async function fetchTextFile(baseUrl: string, path: string, timeoutMs = 5000): Promise<string | null> {
+  try {
+    const fileUrl = new URL(path, baseUrl).href;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    const res = await fetch(fileUrl, {
+      signal: controller.signal,
+      headers: { "User-Agent": "IAFriendly/1.0 (Analysis)" },
+    });
+    clearTimeout(timeout);
+    if (!res.ok) return null;
+    const text = await res.text();
+    return text.slice(0, 50000); // Limit size
+  } catch {
+    return null;
+  }
+}
+
+function analyzeRobotsTxt(content: string | null): RobotsAnalysis {
+  if (!content) {
+    return { exists: false, blocksAI: [], allowsAI: [], hasSitemapReference: false };
+  }
+  
+  const lines = content.toLowerCase().split("\n");
+  const blocksAI: string[] = [];
+  const allowsAI: string[] = [];
+  let hasSitemapReference = false;
+  let currentUserAgent = "";
+  
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith("sitemap:")) {
+      hasSitemapReference = true;
+    }
+    if (trimmed.startsWith("user-agent:")) {
+      currentUserAgent = trimmed.replace("user-agent:", "").trim();
+    }
+    if (trimmed.startsWith("disallow:") && trimmed.includes("/")) {
+      for (const bot of AI_BOT_AGENTS) {
+        if (currentUserAgent === bot.toLowerCase() || currentUserAgent === "*") {
+          if (currentUserAgent !== "*" && !blocksAI.includes(bot)) {
+            blocksAI.push(bot);
+          }
+        }
+      }
+    }
+    if (trimmed.startsWith("allow:")) {
+      for (const bot of AI_BOT_AGENTS) {
+        if (currentUserAgent === bot.toLowerCase() && !allowsAI.includes(bot)) {
+          allowsAI.push(bot);
+        }
+      }
+    }
+  }
+  
+  return { exists: true, blocksAI, allowsAI, hasSitemapReference };
+}
+
+async function checkSitemap(baseUrl: string, robotsHasSitemap: boolean): Promise<SitemapAnalysis> {
+  const sitemapPaths = ["/sitemap.xml", "/sitemap_index.xml", "/sitemap/sitemap.xml"];
+  for (const path of sitemapPaths) {
+    const content = await fetchTextFile(baseUrl, path);
+    if (content && (content.includes("<urlset") || content.includes("<sitemapindex"))) {
+      return { exists: true, url: new URL(path, baseUrl).href };
+    }
+  }
+  return { exists: false, url: null };
+}
+
+async function checkLlmsTxt(baseUrl: string): Promise<LlmsTxtAnalysis> {
+  const content = await fetchTextFile(baseUrl, "/llms.txt");
+  if (content && content.length > 10) {
+    return { exists: true, content: content.slice(0, 2000) };
+  }
+  return { exists: false, content: null };
+}
 
 function stripHtml(html: string): string {
   return html
@@ -31,7 +140,10 @@ function buildAiPreviewYaml(preview: AIPreviewContent): string {
   lines.push(`  description: ${preview.meta.description ? escapeYamlString(preview.meta.description.slice(0, 200)) : "null"}`);
   lines.push(`  ogTitle: ${preview.meta.ogTitle ? escapeYamlString(preview.meta.ogTitle) : "null"}`);
   lines.push(`  ogDescription: ${preview.meta.ogDescription ? escapeYamlString((preview.meta.ogDescription || "").slice(0, 200)) : "null"}`);
+  lines.push(`  ogImage: ${preview.meta.ogImage ? escapeYamlString(preview.meta.ogImage) : "null"}`);
+  lines.push(`  ogType: ${preview.meta.ogType || "null"}`);
   lines.push(`  canonical: ${preview.meta.canonical ? escapeYamlString(preview.meta.canonical) : "null"}`);
+  lines.push(`  twitterCard: ${preview.meta.twitterCard || "null"}`);
   lines.push(`lang: ${preview.lang ? escapeYamlString(preview.lang) : "null"}`);
   lines.push("structure:");
   lines.push("  headings:");
@@ -40,6 +152,22 @@ function buildAiPreviewYaml(preview: AIPreviewContent): string {
     lines.push(`      text: ${escapeYamlString(h.text.slice(0, 120))}`);
   }
   lines.push(`  hasStructuredData: ${preview.structuredData}`);
+  lines.push("  semanticHtml:");
+  lines.push(`    hasNav: ${preview.semanticHtml.hasNav}`);
+  lines.push(`    hasHeader: ${preview.semanticHtml.hasHeader}`);
+  lines.push(`    hasMain: ${preview.semanticHtml.hasMain}`);
+  lines.push(`    hasArticle: ${preview.semanticHtml.hasArticle}`);
+  lines.push(`    hasFooter: ${preview.semanticHtml.hasFooter}`);
+  lines.push("botAccess:");
+  lines.push(`  robotsTxt: ${preview.botAccess.robotsTxt.exists}`);
+  lines.push(`  sitemap: ${preview.botAccess.sitemap.exists}`);
+  lines.push(`  llmsTxt: ${preview.botAccess.llmsTxt.exists}`);
+  lines.push(`  blockedAIBots: [${preview.botAccess.robotsTxt.blocksAI.join(", ")}]`);
+  lines.push("  metaRobots:");
+  lines.push(`    noindex: ${preview.botAccess.metaRobots.noindex}`);
+  lines.push(`    nofollow: ${preview.botAccess.metaRobots.nofollow}`);
+  lines.push(`    nosnippet: ${preview.botAccess.metaRobots.nosnippet}`);
+  lines.push(`    noai: ${preview.botAccess.metaRobots.noai}`);
   lines.push("content_preview: |");
   const content = preview.mainContent.slice(0, 1500).split("\n");
   for (const line of content) {
@@ -158,6 +286,16 @@ export async function POST(request: NextRequest) {
 
     const $ = cheerio.load(rawHtml);
 
+    // Fetch robots.txt, sitemap, and llms.txt in parallel
+    const baseUrl = new URL(url).origin;
+    const [robotsTxtContent, llmsTxtResult] = await Promise.all([
+      fetchTextFile(baseUrl, "/robots.txt"),
+      checkLlmsTxt(baseUrl),
+    ]);
+    
+    const robotsAnalysis = analyzeRobotsTxt(robotsTxtContent);
+    const sitemapResult = await checkSitemap(baseUrl, robotsAnalysis.hasSitemapReference);
+
     const improvements: Improvement[] = [];
     let score = 10;
     const maxScore = 10;
@@ -270,6 +408,187 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // Test: robots.txt
+    if (!robotsAnalysis.exists) {
+      score -= 0.3;
+      improvements.push({
+        id: "robots-txt",
+        title: "Fichier robots.txt absent",
+        description: "Le robots.txt guide les crawlers sur les zones accessibles du site.",
+        severity: "warning",
+        category: "Accessibilité Bots",
+        suggestion: "Créez un fichier robots.txt à la racine de votre site.",
+      });
+    } else if (robotsAnalysis.blocksAI.length > 0) {
+      score -= 0.5;
+      improvements.push({
+        id: "robots-blocks-ai",
+        title: `Crawlers IA bloqués (${robotsAnalysis.blocksAI.join(", ")})`,
+        description: "Certains crawlers IA sont explicitement bloqués dans votre robots.txt.",
+        severity: "warning",
+        category: "Accessibilité Bots",
+        suggestion: "Vérifiez si ce blocage est intentionnel. Sinon, autorisez ces agents.",
+      });
+    }
+
+    // Test: Sitemap
+    if (!sitemapResult.exists) {
+      score -= 0.3;
+      improvements.push({
+        id: "sitemap",
+        title: "Sitemap XML non trouvé",
+        description: "Un sitemap aide les bots à découvrir et indexer toutes vos pages.",
+        severity: "warning",
+        category: "Accessibilité Bots",
+        suggestion: "Créez un sitemap.xml et référencez-le dans votre robots.txt.",
+      });
+    }
+
+    // Test: llms.txt (emerging standard for LLMs)
+    if (llmsTxtResult.exists) {
+      score += 0.2; // Bonus for having llms.txt
+    } else {
+      improvements.push({
+        id: "llms-txt",
+        title: "Fichier llms.txt absent",
+        description: "Le llms.txt est un standard émergent pour guider les LLM sur votre site.",
+        severity: "info",
+        category: "Accessibilité Bots",
+        suggestion: "Créez un fichier llms.txt avec des instructions pour les IA.",
+      });
+    }
+
+    // Test: Meta robots restrictions
+    const metaRobots = $('meta[name="robots"]').attr("content")?.toLowerCase() || "";
+    const xRobotsTag = $('meta[name="googlebot"]').attr("content")?.toLowerCase() || "";
+    const hasNoindex = metaRobots.includes("noindex") || xRobotsTag.includes("noindex");
+    const hasNofollow = metaRobots.includes("nofollow") || xRobotsTag.includes("nofollow");
+    const hasNosnippet = metaRobots.includes("nosnippet");
+    const hasNoai = metaRobots.includes("noai") || metaRobots.includes("noimageai");
+    
+    if (hasNoindex) {
+      score -= 1;
+      improvements.push({
+        id: "noindex",
+        title: "Page marquée noindex",
+        description: "Cette page ne sera pas indexée par les moteurs de recherche ni les IA.",
+        severity: "critical",
+        category: "Accessibilité Bots",
+        suggestion: "Retirez noindex si vous souhaitez que la page soit visible des IA.",
+      });
+    }
+    if (hasNosnippet) {
+      improvements.push({
+        id: "nosnippet",
+        title: "Snippets désactivés (nosnippet)",
+        description: "Les IA ne pourront pas générer d'extraits de votre contenu.",
+        severity: "info",
+        category: "Accessibilité Bots",
+        suggestion: "Retirez nosnippet pour permettre aux IA d'afficher des extraits.",
+      });
+    }
+    if (hasNoai) {
+      improvements.push({
+        id: "noai",
+        title: "Balise noai détectée",
+        description: "Vous avez explicitement demandé l'exclusion de l'entraînement IA.",
+        severity: "info",
+        category: "Accessibilité Bots",
+        suggestion: "Vérifiez si cette restriction correspond à votre intention.",
+      });
+    }
+
+    // Test: Semantic HTML elements
+    const hasNav = $("nav").length > 0;
+    const hasHeader = $("header").length > 0;
+    const hasFooter = $("footer").length > 0;
+    const hasMain = $("main").length > 0;
+    const hasArticle = $("article").length > 0;
+    const hasSection = $("section").length > 0;
+    const hasAside = $("aside").length > 0;
+    const semanticElementsCount = [hasNav, hasHeader, hasFooter, hasMain, hasArticle, hasSection].filter(Boolean).length;
+    
+    if (semanticElementsCount < 3) {
+      score -= 0.5;
+      improvements.push({
+        id: "semantic-html",
+        title: "Peu de balises HTML sémantiques",
+        description: "Les balises sémantiques (nav, header, main, article, section, footer) aident les IA à comprendre la structure.",
+        severity: "warning",
+        category: "Structure",
+        suggestion: "Utilisez des balises sémantiques HTML5 pour structurer votre contenu.",
+      });
+    }
+
+    // Test: Heading hierarchy
+    const h1Count = headings.filter((h) => h.level === 1).length;
+    const h2Count = headings.filter((h) => h.level === 2).length;
+    const headingLevels = headings.map((h) => h.level);
+    let hasSkippedLevel = false;
+    for (let i = 1; i < headingLevels.length; i++) {
+      if (headingLevels[i] - headingLevels[i - 1] > 1) {
+        hasSkippedLevel = true;
+        break;
+      }
+    }
+    
+    if (h1Count > 1) {
+      score -= 0.3;
+      improvements.push({
+        id: "multiple-h1",
+        title: `Plusieurs H1 détectés (${h1Count})`,
+        description: "Une page ne devrait avoir qu'un seul H1 pour clarifier le sujet principal.",
+        severity: "warning",
+        category: "Structure",
+        suggestion: "Gardez un seul <h1> et utilisez <h2>-<h6> pour les sous-sections.",
+      });
+    }
+    if (hasSkippedLevel) {
+      improvements.push({
+        id: "heading-hierarchy",
+        title: "Hiérarchie des titres incohérente",
+        description: "Des niveaux de titre sont sautés (ex: H1 → H3), ce qui peut dérouter les IA.",
+        severity: "info",
+        category: "Structure",
+        suggestion: "Respectez une progression logique: H1 → H2 → H3, etc.",
+      });
+    }
+
+    // Test: Open Graph completeness
+    const ogImage = $('meta[property="og:image"]').attr("content")?.trim() || null;
+    const ogType = $('meta[property="og:type"]').attr("content")?.trim() || null;
+    const ogUrl = $('meta[property="og:url"]').attr("content")?.trim() || null;
+    const ogSiteName = $('meta[property="og:site_name"]').attr("content")?.trim() || null;
+    const missingOg: string[] = [];
+    if (!ogImage) missingOg.push("og:image");
+    if (!ogType) missingOg.push("og:type");
+    if (!ogTitle && !title) missingOg.push("og:title");
+    
+    if (missingOg.length > 0) {
+      score -= Math.min(0.5, missingOg.length * 0.15);
+      improvements.push({
+        id: "open-graph",
+        title: `Balises Open Graph manquantes (${missingOg.join(", ")})`,
+        description: "Open Graph améliore le partage social et la compréhension par les IA.",
+        severity: missingOg.length > 1 ? "warning" : "info",
+        category: "Métadonnées",
+        suggestion: "Ajoutez les balises og:title, og:description, og:image et og:type.",
+      });
+    }
+
+    // Test: Twitter Card
+    const twitterCard = $('meta[name="twitter:card"]').attr("content")?.trim() || null;
+    if (!twitterCard && ogImage) {
+      improvements.push({
+        id: "twitter-card",
+        title: "Balises Twitter Card absentes",
+        description: "Les Twitter Cards améliorent l'affichage sur les réseaux sociaux.",
+        severity: "info",
+        category: "Métadonnées",
+        suggestion: 'Ajoutez <meta name="twitter:card" content="summary_large_image">.',
+      });
+    }
+
     const hasStructuredData =
       $('script[type="application/ld+json"]').length > 0;
     if (!hasStructuredData && mainClean.length > 500) {
@@ -294,6 +613,18 @@ export async function POST(request: NextRequest) {
       }
     });
 
+    const botAccessInfo: BotAccessInfo = {
+      robotsTxt: robotsAnalysis,
+      sitemap: sitemapResult,
+      llmsTxt: llmsTxtResult,
+      metaRobots: {
+        noindex: hasNoindex,
+        nofollow: hasNofollow,
+        nosnippet: hasNosnippet,
+        noai: hasNoai,
+      },
+    };
+
     const aiPreview: AIPreviewContent = {
       url,
       title,
@@ -301,14 +632,27 @@ export async function POST(request: NextRequest) {
         description: metaDesc,
         ogTitle,
         ogDescription: ogDesc,
+        ogImage,
+        ogType,
         canonical,
+        twitterCard,
       },
       headings,
       mainContent: mainClean.slice(0, 2000),
       images: images.slice(0, 20),
       links: links.slice(0, 30),
       structuredData: hasStructuredData,
+      semanticHtml: {
+        hasNav,
+        hasHeader,
+        hasFooter,
+        hasMain,
+        hasArticle,
+        hasSection,
+        hasAside,
+      },
       lang,
+      botAccess: botAccessInfo,
     };
 
     const aiPreviewYaml = buildAiPreviewYaml(aiPreview);
@@ -323,6 +667,7 @@ export async function POST(request: NextRequest) {
       improvements,
       aiPreview,
       aiPreviewYaml,
+      botAccess: botAccessInfo,
       analyzedAt,
     };
 
