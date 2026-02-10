@@ -174,7 +174,7 @@ export default function Home() {
       </main>
 
       <footer className="mt-20 py-10 border-t border-luxe-border text-center text-sm text-luxe-fg-muted">
-        Method AI — Analyse de lisibilité pour l&apos;IA
+        AI Friendly — Analyse de lisibilité pour l&apos;IA
       </footer>
     </div>
   );

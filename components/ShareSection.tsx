@@ -8,7 +8,7 @@ interface ShareSectionProps {
 }
 
 const SHARE_TEXT = (score: number, url: string) =>
-  `Mon site ${url} a obtenu ${score}/10 sur Method AI — Vérifiez si votre site est lisible par l'IA !`;
+  `Mon site ${url} a obtenu ${score}/10 sur AI Friendly — Vérifiez si votre site est lisible par l'IA !`;
 
 export function ShareSection({ result }: ShareSectionProps) {
   const [copied, setCopied] = useState(false);
@@ -34,7 +34,7 @@ export function ShareSection({ result }: ShareSectionProps) {
   function handleShareNative() {
     if (typeof navigator !== "undefined" && navigator.share) {
       navigator.share({
-        title: "Method AI — Résultat d'analyse",
+        title: "AI Friendly — Résultat d'analyse",
         text,
         url: shareUrl,
       }).catch(() => {});
