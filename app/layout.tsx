@@ -23,6 +23,33 @@ export const metadata: Metadata = {
   title: "AI Friendly — Vérifiez si votre site est lisible par l'IA",
   description:
     "Analysez n'importe quelle URL pour savoir si elle est optimisée pour les moteurs et assistants IA (ChatGPT, etc.). Score, recommandations et aperçu IA.",
+  openGraph: {
+    title: "AI Friendly — Vérifiez si votre site est lisible par l'IA",
+    description:
+      "Analysez n'importe quelle URL pour savoir si elle est optimisée pour les moteurs et assistants IA (ChatGPT, etc.). Score, recommandations et aperçu IA.",
+    type: "website",
+    url: "https://aifriendly.fr",
+    siteName: "AI Friendly",
+    locale: "fr_FR",
+    images: [
+      {
+        url: "https://aifriendly.fr/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "AI Friendly - Analysez la lisibilité IA de votre site",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "AI Friendly — Vérifiez si votre site est lisible par l'IA",
+    description:
+      "Analysez n'importe quelle URL pour savoir si elle est optimisée pour les moteurs et assistants IA.",
+    images: ["https://aifriendly.fr/og-image.png"],
+  },
+  alternates: {
+    canonical: "https://aifriendly.fr",
+  },
 };
 
 export default function RootLayout({

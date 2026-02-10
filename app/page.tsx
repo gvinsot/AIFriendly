@@ -67,6 +67,18 @@ export default function Home() {
       </header>
 
       <main className="relative max-w-3xl mx-auto px-6 py-12">
+        <article className="mb-10">
+          <h2 className="font-display text-2xl font-semibold text-luxe-fg mb-4">
+            Analysez la lisibilité IA de votre site web
+          </h2>
+          <p className="text-luxe-fg-muted leading-relaxed mb-4">
+            AI Friendly est un outil gratuit qui évalue si votre site est optimisé pour les moteurs et assistants d&apos;intelligence artificielle comme ChatGPT, Claude, Gemini et autres LLMs. Entrez une URL ci-dessous pour obtenir un score de lisibilité sur 10, des recommandations personnalisées et un aperçu de ce que voit une IA.
+          </p>
+          <p className="text-luxe-fg-muted leading-relaxed text-sm">
+            Notre analyse vérifie les métadonnées (title, description, Open Graph, Schema.org), la structure du contenu (balises sémantiques, hiérarchie des titres) et l&apos;accessibilité aux bots (robots.txt, sitemap, llms.txt).
+          </p>
+        </article>
+
         <form onSubmit={handleSubmit} className="space-y-5">
           <div className="flex flex-col sm:flex-row gap-4">
             <input
@@ -173,8 +185,17 @@ export default function Home() {
         )}
       </main>
 
-      <footer className="mt-20 py-10 border-t border-luxe-border text-center text-sm text-luxe-fg-muted">
-        AI Friendly — Analyse de lisibilité pour l&apos;IA
+      <footer className="mt-20 py-10 border-t border-luxe-border">
+        <div className="max-w-3xl mx-auto px-6 text-center">
+          <p className="text-luxe-fg font-medium mb-2">AI Friendly</p>
+          <p className="text-sm text-luxe-fg-muted mb-4">
+            Outil d&apos;analyse de lisibilité pour l&apos;intelligence artificielle
+          </p>
+          <p className="text-xs text-luxe-fg-muted">
+            Optimisez votre site pour ChatGPT, Claude, Gemini et les autres assistants IA. 
+            Améliorez votre visibilité dans les réponses générées par les LLMs.
+          </p>
+        </div>
       </footer>
     </div>
   );
