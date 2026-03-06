@@ -8,7 +8,9 @@ FROM node:20-alpine AS base
 FROM base AS deps
 WORKDIR /app
 COPY package.json package-lock.json* ./
+COPY prisma/schema.prisma ./prisma/schema.prisma
 RUN npm ci
+RUN npx prisma generate
 
 # Étape 2: build Next.js (standalone)
 FROM base AS builder
@@ -29,6 +31,10 @@ RUN addgroup --system --gid 1001 nodejs && \
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+# Copy Prisma engine for runtime
+COPY --from=deps /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=deps /app/node_modules/@prisma ./node_modules/@prisma
+COPY --from=deps /app/prisma ./prisma
 USER nextjs
 EXPOSE 3000
 ENV PORT=3000

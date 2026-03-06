@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import type { AnalysisResult, Improvement } from "@/lib/types";
 import { ShareSection } from "@/components/ShareSection";
 
@@ -62,6 +63,12 @@ export default function Home() {
           <p className="text-luxe-fg-muted mt-2 text-sm tracking-wide">
             Vérifiez si votre site est lisible et optimisé pour l&apos;IA
           </p>
+          <Link
+            href="/dashboard"
+            className="absolute top-8 right-6 rounded-lg border border-luxe-border text-sm text-luxe-fg-muted hover:text-luxe-gold hover:border-luxe-gold/30 px-4 py-2 transition-colors"
+          >
+            Mon espace
+          </Link>
           <div className="absolute bottom-0 left-0 w-24 h-px bg-gradient-to-r from-luxe-gold to-transparent" aria-hidden />
         </div>
       </header>

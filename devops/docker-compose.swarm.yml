@@ -11,6 +11,14 @@ services:
     build:
       context: ..
       dockerfile: Dockerfile
+    environment:
+      - DB_CONNECTION_STRING=${DB_CONNECTION_STRING}
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
+      - NEXTAUTH_URL=https://${TRAEFIK_HOST}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - MICROSOFT_CLIENT_ID=${MICROSOFT_CLIENT_ID}
+      - MICROSOFT_CLIENT_SECRET=${MICROSOFT_CLIENT_SECRET}
     networks:
       - proxy
     deploy:
@@ -31,6 +39,25 @@ services:
         - "traefik.http.routers.ai-friendly-http.service=noop@internal"
       restart_policy:
         condition: on-failure
+      placement:
+        constraints:
+          - node.labels.gpu != true
+
+  # Worker — analyses programmées et nettoyage automatique (60 jours)
+  ai-friendly-worker:
+    image: registry.methodinfo.fr/ai-friendly-worker:latest
+    build:
+      context: ..
+      dockerfile: worker/Dockerfile
+    environment:
+      - DB_CONNECTION_STRING=${DB_CONNECTION_STRING}
+    networks:
+      - proxy
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 30s
       placement:
         constraints:
           - node.labels.gpu != true
