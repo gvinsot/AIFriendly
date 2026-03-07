@@ -28,12 +28,12 @@ export const metadata: Metadata = {
     description:
       "Analysez n'importe quelle URL pour savoir si elle est optimisée pour les moteurs et assistants IA (ChatGPT, etc.). Score, recommandations et aperçu IA.",
     type: "website",
-    url: "https://aifriendly.fr",
+    url: "https://aifriendly.eu",
     siteName: "AI Friendly",
     locale: "fr_FR",
     images: [
       {
-        url: "https://aifriendly.fr/og-image.png",
+        url: "https://aifriendly.eu/og-image.png",
         width: 1200,
         height: 630,
         alt: "AI Friendly - Analysez la lisibilité IA de votre site",
@@ -45,10 +45,10 @@ export const metadata: Metadata = {
     title: "AI Friendly — Vérifiez si votre site est lisible par l'IA",
     description:
       "Analysez n'importe quelle URL pour savoir si elle est optimisée pour les moteurs et assistants IA.",
-    images: ["https://aifriendly.fr/og-image.png"],
+    images: ["https://aifriendly.eu/og-image.png"],
   },
   alternates: {
-    canonical: "https://aifriendly.fr",
+    canonical: "https://aifriendly.eu",
   },
 };
 
@@ -67,7 +67,7 @@ export default function RootLayout({
           {`
             var _paq = window._paq = window._paq || [];
             _paq.push(["setDocumentTitle", document.domain + "/" + document.title]);
-            _paq.push(["setCookieDomain", "*.aifriendly.fr"]);
+            _paq.push(["setCookieDomain", "*.aifriendly.eu"]);
             _paq.push(['trackPageView']);
             _paq.push(['enableLinkTracking']);
             (function() {

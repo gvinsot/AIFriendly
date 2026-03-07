@@ -2,7 +2,7 @@
 
 **Version** : 3.0
 **Date** : Mars 2026
-**URL** : https://aifriendly.fr
+**URL** : https://aifriendly.eu
 **Licence** : MIT
 
 ---
@@ -475,10 +475,10 @@ Représentation structurée comprenant :
 |----------|-------------|
 | `DB_CONNECTION_STRING` | URL PostgreSQL |
 | `NEXTAUTH_SECRET` | Secret NextAuth |
-| `NEXTAUTH_URL` | URL publique (https://aifriendly.fr) |
+| `NEXTAUTH_URL` | URL publique (https://aifriendly.eu) |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | OAuth Google |
 | `MICROSOFT_CLIENT_ID` / `MICROSOFT_CLIENT_SECRET` | OAuth Microsoft |
-| `TRAEFIK_HOST` | Hostname Traefik (aifriendly.fr) |
+| `TRAEFIK_HOST` | Hostname Traefik (aifriendly.eu) |
 
 ### 10.2 Docker Swarm
 
@@ -497,7 +497,7 @@ Représentation structurée comprenant :
 
 - Matomo self-hosted sur `stats.methodinfo.fr`
 - Site ID : 2
-- Cookie domain : `*.aifriendly.fr`
+- Cookie domain : `*.aifriendly.eu`
 
 ---
 

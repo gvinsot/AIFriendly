@@ -105,7 +105,7 @@ export async function analyzeUrl(targetUrl: string): Promise<AnalysisOutput> {
   try {
     res = await fetch(targetUrl, {
       signal: controller.signal,
-      headers: { "User-Agent": "IAFriendly/1.0 (Analysis; +https://aifriendly.fr)" },
+      headers: { "User-Agent": "IAFriendly/1.0 (Analysis; +https://aifriendly.eu)" },
       redirect: "follow",
     });
   } finally {
