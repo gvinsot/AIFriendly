@@ -1,6 +1,6 @@
 # AI Friendly — Spécifications techniques et fonctionnelles
 
-**Version** : 2.0
+**Version** : 3.0
 **Date** : Mars 2026
 **URL** : https://aifriendly.fr
 **Licence** : MIT
@@ -9,12 +9,20 @@
 
 ## 1. Vue d'ensemble
 
-AI Friendly est une application web qui analyse la **lisibilité d'un site web par les intelligences artificielles** (ChatGPT, Claude, Gemini, Perplexity, etc.). Elle fournit un score sur 10, des recommandations d'amélioration, et un aperçu structuré (YAML) de ce qu'une IA "voit" en visitant la page.
+AI Friendly est une plateforme de monitoring web complète qui évalue trois dimensions essentielles d'un site web :
+
+1. **Accessibilité IA** — Lisibilité du site par les intelligences artificielles (ChatGPT, Claude, Gemini, Perplexity, etc.)
+2. **Disponibilité** — Surveillance continue avec mesure du ping et de la vitesse de chargement
+3. **Sécurité** — Audit automatisé basé sur les tests OWASP
+
+Chaque dimension fournit un **score sur 10**, des détails consultables au clic, et un suivi dans le temps via le dashboard utilisateur.
 
 ### 1.1 Objectifs
 
 - Permettre à tout propriétaire de site de vérifier si son contenu est bien interprétable par les LLMs et assistants IA
-- Fournir des recommandations concrètes et actionnables pour améliorer la visibilité IA
+- **Surveiller la disponibilité** de ses sites en continu (ping, temps de chargement)
+- **Évaluer la sécurité** de ses sites avec des audits OWASP automatisés
+- Fournir des recommandations concrètes et actionnables pour améliorer chaque dimension
 - Proposer un suivi dans le temps avec des analyses programmées (dashboard utilisateur)
 
 ### 1.2 Public cible
@@ -67,22 +75,34 @@ AIFriendly/
 │           ├── route.ts            # GET/POST /api/sites
 │           └── [id]/
 │               ├── route.ts        # GET/PUT/DELETE /api/sites/:id
-│               ├── analyze/route.ts # POST /api/sites/:id/analyze
-│               └── history/
-│                   ├── route.ts     # GET /api/sites/:id/history
-│                   └── [analysisId]/route.ts  # GET détail analyse
+│               ├── analyze/route.ts # POST /api/sites/:id/analyze (IA)
+│               ├── history/
+│               │   ├── route.ts     # GET /api/sites/:id/history
+│               │   └── [analysisId]/route.ts  # GET détail analyse
+│               ├── availability/
+│               │   ├── route.ts     # GET /api/sites/:id/availability (historique)
+│               │   ├── check/route.ts # POST /api/sites/:id/availability/check
+│               │   └── [checkId]/route.ts  # GET détail d'un check
+│               └── security/
+│                   ├── route.ts     # GET /api/sites/:id/security (historique)
+│                   ├── scan/route.ts # POST /api/sites/:id/security/scan
+│                   └── [scanId]/route.ts  # GET détail d'un scan
 ├── components/
 │   ├── DashboardNav.tsx            # Navigation dashboard
 │   └── ShareSection.tsx            # Boutons de partage social
 ├── lib/
-│   ├── analyzer.ts                 # Moteur d'analyse (utilisé par API + worker)
+│   ├── analyzer.ts                 # Moteur d'analyse IA (utilisé par API + worker)
+│   ├── availability-checker.ts     # Moteur de check disponibilité (ping + vitesse)
+│   ├── security-scanner.ts         # Moteur de scan sécurité (tests OWASP)
 │   ├── types.ts                    # Types TypeScript partagés
 │   ├── prisma.ts                   # Client Prisma singleton
 │   ├── rateLimit.ts                # Rate limiting en mémoire (par IP)
 │   ├── urlSecurity.ts              # Validation URL + protection SSRF
 │   └── auth-types.ts               # Types d'authentification
 ├── worker/
-│   ├── index.ts                    # Worker d'analyses programmées
+│   ├── index.ts                    # Worker principal (orchestrateur)
+│   ├── availability-worker.ts      # Worker disponibilité (cycle toutes les minutes)
+│   ├── security-worker.ts          # Worker sécurité (cycle toutes les heures)
 │   ├── Dockerfile                  # Image Docker du worker
 │   ├── package.json                # Dépendances du worker
 │   └── tsconfig.json
@@ -150,22 +170,122 @@ Les deux services sont connectés au réseau `proxy` (Traefik).
 #### 4.3.3 Détail d'un site (`/dashboard/sites/[id]`)
 
 - Informations du site (nom, URL, fréquence)
-- **Graphique d'évolution** du score (barres verticales, 30 dernières analyses)
-- **Historique des analyses** avec navigation et détail au clic
-- **Analyse manuelle** à la demande (bouton "Analyser maintenant")
-- Détail d'une analyse : améliorations + aperçu YAML
+- **3 onglets** : Accessibilité IA | Disponibilité | Sécurité
+- Chaque onglet affiche :
+  - **Score actuel** sur 10 avec code couleur
+  - **Graphique d'évolution** du score (barres verticales, 30 dernières entrées)
+  - **Historique** des analyses/checks/scans avec navigation
+  - **Détail au clic** sur chaque élément (voir sections 5, 6, 7)
+- **Actions manuelles** : boutons "Analyser", "Checker", "Scanner"
 
-### 4.4 Worker d'analyses programmées
+### 4.4 Monitoring de disponibilité
+
+#### 4.4.1 Principe
+
+- Check automatique **toutes les minutes** pour chaque site actif
+- Mesure du **ping** (latence réseau en ms)
+- Mesure du **temps de chargement** complet de la page (ms)
+- Calcul d'un **score de disponibilité sur 10**
+
+#### 4.4.2 Critères de scoring disponibilité
+
+Le score démarre à 10 et des points sont déduits :
+
+| Critère | Condition | Points déduits |
+|---------|-----------|----------------|
+| Site inaccessible | HTTP error / timeout | Score = 0 |
+| Ping élevé | > 500ms | -3.0 |
+| Ping moyen | 200-500ms | -1.5 |
+| Ping acceptable | 100-200ms | -0.5 |
+| Chargement très lent | > 10s | -3.0 |
+| Chargement lent | 5-10s | -2.0 |
+| Chargement moyen | 2-5s | -1.0 |
+| Chargement correct | 1-2s | -0.5 |
+| Code HTTP non-200 | 3xx, 4xx, 5xx | -1.0 à -3.0 |
+| Certificat SSL expiré/invalide | Erreur TLS | -2.0 |
+
+#### 4.4.3 Détail d'un check (au clic)
+
+- **Statut HTTP** : code de réponse
+- **Ping** : latence en ms avec indicateur visuel
+- **Temps de chargement** : durée totale en ms
+- **TTFB** (Time To First Byte) : en ms
+- **Certificat SSL** : validité, expiration, émetteur
+- **Taille de la réponse** : en Ko
+- **Timestamp** du check
+- **Historique des incidents** : périodes d'indisponibilité détectées
+
+### 4.5 Audit de sécurité
+
+#### 4.5.1 Principe
+
+- Scan automatique **toutes les heures** pour chaque site actif
+- Tests basés sur les **OWASP Top 10** et bonnes pratiques de sécurité web
+- Calcul d'un **score de sécurité sur 10**
+
+#### 4.5.2 Tests OWASP et critères de scoring
+
+Le score démarre à 10 et des points sont déduits :
+
+| Test | Description | Points déduits | Sévérité |
+|------|-------------|----------------|----------|
+| **Headers de sécurité** | | | |
+| Content-Security-Policy absent | Pas de CSP configuré | -1.5 | Critique |
+| X-Frame-Options absent | Vulnérable au clickjacking | -1.0 | Critique |
+| X-Content-Type-Options absent | Pas de `nosniff` | -0.5 | Warning |
+| Strict-Transport-Security absent | Pas de HSTS | -1.0 | Critique |
+| X-XSS-Protection absent | Pas de protection XSS navigateur | -0.3 | Warning |
+| Referrer-Policy absent | Fuite d'informations de navigation | -0.3 | Info |
+| Permissions-Policy absent | Pas de restriction des API navigateur | -0.3 | Info |
+| **Configuration SSL/TLS** | | | |
+| HTTP sans redirection HTTPS | Trafic non chiffré | -2.0 | Critique |
+| TLS < 1.2 | Protocole obsolète | -1.5 | Critique |
+| Certificat expiré ou invalide | Certificat non valide | -2.0 | Critique |
+| HSTS max-age < 6 mois | Durée HSTS trop courte | -0.5 | Warning |
+| **Fuites d'information** | | | |
+| Header `Server` exposé | Révèle la technologie serveur | -0.3 | Info |
+| Header `X-Powered-By` exposé | Révèle le framework | -0.5 | Warning |
+| Pages d'erreur verbeuses | Stack traces visibles | -1.0 | Critique |
+| Répertoires listables | Directory listing activé | -1.0 | Critique |
+| **Cookies** | | | |
+| Cookies sans flag `Secure` | Envoyés en HTTP | -1.0 | Critique |
+| Cookies sans flag `HttpOnly` | Accessibles via JS (XSS) | -0.5 | Warning |
+| Cookies sans flag `SameSite` | Vulnérable au CSRF | -0.5 | Warning |
+| **Injection et XSS** | | | |
+| Formulaires sans CSRF token | Vulnérable au CSRF | -1.0 | Critique |
+| Entrées non-escapées réfléchies | Potentiel XSS réfléchi | -1.5 | Critique |
+| **Autres** | | | |
+| robots.txt expose des chemins sensibles | `/admin`, `/api/internal`, etc. | -0.5 | Warning |
+| Fichiers sensibles accessibles | `.env`, `.git/`, `wp-config.php` | -2.0 | Critique |
+| Open redirect détecté | Redirection non validée | -1.0 | Critique |
+
+#### 4.5.3 Détail d'un scan (au clic)
+
+- **Score global** sur 10 avec répartition par catégorie
+- **Liste des tests** effectués avec résultat (pass/fail/warning)
+- **Détail par catégorie** :
+  - Headers de sécurité : tableau des headers présents/absents avec valeurs
+  - SSL/TLS : version, cipher suite, validité certificat, chaîne de confiance
+  - Cookies : liste avec flags analysés
+  - Fuites d'information : headers et fichiers exposés
+  - Injection/XSS : résultats des tests de réflexion
+- **Recommandations** classées par sévérité (critique / warning / info)
+- **Timestamp** du scan
+
+### 4.6 Worker (orchestrateur multi-tâches)
 
 - Processus long-running (Node.js, pas de dépendance Next.js)
-- **Cycle** : vérification toutes les 5 minutes
-- Analyse les sites actifs dont la dernière analyse dépasse la fréquence configurée
-- **Rétention** : suppression automatique des résultats > 60 jours
-- Délai de 2s entre chaque analyse (politesse)
+- **3 boucles parallèles** :
+  - **Analyse IA** : vérification toutes les 5 minutes, exécution selon la fréquence configurée du site
+  - **Check disponibilité** : exécution **toutes les minutes** pour chaque site actif
+  - **Scan sécurité** : exécution **toutes les heures** pour chaque site actif
+- **Rétention** : suppression automatique des résultats > 60 jours (pour les 3 types)
+- Délai de 2s entre chaque analyse IA (politesse), pas de délai pour les checks de disponibilité
+- Gestion des erreurs : retry avec backoff exponentiel en cas d'échec
 
 ---
 
-## 5. Moteur d'analyse
+## 5. Moteur d'analyse — Accessibilité IA
 
 ### 5.1 Critères de scoring
 
@@ -221,9 +341,9 @@ Représentation structurée comprenant :
 
 | Méthode | Route | Description |
 |---------|-------|-------------|
-| POST | `/api/analyze` | Analyse une URL (body: `{ "url": "..." }`) |
+| POST | `/api/analyze` | Analyse IA d'une URL (body: `{ "url": "..." }`) |
 
-### 6.2 Endpoints authentifiés (dashboard)
+### 6.2 Endpoints authentifiés — Sites
 
 | Méthode | Route | Description |
 |---------|-------|-------------|
@@ -231,10 +351,31 @@ Représentation structurée comprenant :
 | POST | `/api/sites` | Créer un site |
 | GET | `/api/sites/:id` | Détail d'un site |
 | PUT | `/api/sites/:id` | Modifier un site |
-| DELETE | `/api/sites/:id` | Supprimer un site et son historique |
-| POST | `/api/sites/:id/analyze` | Lancer une analyse manuelle |
-| GET | `/api/sites/:id/history` | Historique des analyses (liste) |
-| GET | `/api/sites/:id/history/:analysisId` | Détail d'une analyse |
+| DELETE | `/api/sites/:id` | Supprimer un site et tout son historique |
+
+### 6.3 Endpoints authentifiés — Analyse IA
+
+| Méthode | Route | Description |
+|---------|-------|-------------|
+| POST | `/api/sites/:id/analyze` | Lancer une analyse IA manuelle |
+| GET | `/api/sites/:id/history` | Historique des analyses IA (liste) |
+| GET | `/api/sites/:id/history/:analysisId` | Détail d'une analyse IA |
+
+### 6.4 Endpoints authentifiés — Disponibilité
+
+| Méthode | Route | Description |
+|---------|-------|-------------|
+| GET | `/api/sites/:id/availability` | Historique des checks de disponibilité |
+| POST | `/api/sites/:id/availability/check` | Lancer un check de disponibilité manuel |
+| GET | `/api/sites/:id/availability/:checkId` | Détail d'un check (ping, TTFB, chargement, SSL) |
+
+### 6.5 Endpoints authentifiés — Sécurité
+
+| Méthode | Route | Description |
+|---------|-------|-------------|
+| GET | `/api/sites/:id/security` | Historique des scans de sécurité |
+| POST | `/api/sites/:id/security/scan` | Lancer un scan de sécurité manuel |
+| GET | `/api/sites/:id/security/:scanId` | Détail d'un scan (tests OWASP, recommandations) |
 
 ---
 
@@ -249,9 +390,24 @@ Représentation structurée comprenant :
 
 ### 7.2 Tables applicatives
 
-- **Site** : id, userId (FK User), name, url, frequency (`6h|daily|weekly|monthly`), isActive, timestamps
+- **Site** : id, userId (FK User), name, url, frequency (`6h|daily|weekly|monthly`), isActive, availabilityEnabled (bool, default true), securityEnabled (bool, default true), timestamps
   - Index sur `userId`
+
 - **AnalysisResult** : id, siteId (FK Site), score, maxScore (default 10), details (JSON), createdAt
+  - Stocke les résultats d'analyse d'accessibilité IA
+  - Index sur `[siteId, createdAt]`
+  - Index sur `[createdAt]` (nettoyage)
+  - Cascade delete depuis Site
+
+- **AvailabilityCheck** : id, siteId (FK Site), score, httpStatus, pingMs, ttfbMs, loadTimeMs, responseSize, sslValid, sslExpiry, details (JSON), createdAt
+  - Stocke les résultats de check de disponibilité (1 par minute)
+  - Index sur `[siteId, createdAt]`
+  - Index sur `[createdAt]` (nettoyage)
+  - Cascade delete depuis Site
+
+- **SecurityScan** : id, siteId (FK Site), score, headersScore, sslScore, cookiesScore, infoLeakScore, injectionScore, details (JSON), createdAt
+  - Stocke les résultats de scan de sécurité (1 par heure)
+  - Sous-scores par catégorie pour visualisation radar/breakdown
   - Index sur `[siteId, createdAt]`
   - Index sur `[createdAt]` (nettoyage)
   - Cascade delete depuis Site
@@ -347,9 +503,14 @@ Représentation structurée comprenant :
 
 ## 11. Limites et contraintes
 
-- Maximum 20 sites par utilisateur
-- Rétention des analyses : 60 jours
+- Maximum **20 sites** par utilisateur
+- Rétention de toutes les données (analyses, checks, scans) : **60 jours**
 - Taille max de page analysée : 5 Mo
-- Rate limiting : 10 analyses/minute par IP
-- Timeout d'analyse : 15 secondes
+- Rate limiting : 10 requêtes/minute par IP
+- Timeout d'analyse IA : 15 secondes
+- Timeout check disponibilité : 30 secondes
+- Timeout scan sécurité : 60 secondes
 - Pas d'analyse des pages non-HTML (PDF, images, etc.)
+- Fréquence checks disponibilité : **1 par minute** (non configurable)
+- Fréquence scans sécurité : **1 par heure** (non configurable)
+- Les scans sécurité sont passifs (pas d'exploitation active, uniquement détection)
