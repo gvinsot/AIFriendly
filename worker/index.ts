@@ -446,31 +446,74 @@ async function scanSecurity(targetUrl: string) {
     const $ = cheerio.load(html);
     const baseUrl = new URL(targetUrl).origin;
 
-    // === HEADERS ===
-    if (!headers.get("content-security-policy")) { headersScore -= 1.5; tests.push({ id: "csp-missing", name: "CSP", category: "headers", status: "fail", severity: "critical", value: "Absent", recommendation: "Ajoutez Content-Security-Policy.", deduction: 1.5 }); }
-    else { tests.push({ id: "csp-ok", name: "CSP", category: "headers", status: "pass", severity: "info", value: "Présent", deduction: 0 }); }
+    // ═══════════════════════════════════════════
+    // CATEGORY 1: Security Headers (14 tests)
+    // ═══════════════════════════════════════════
 
-    if (!headers.get("x-frame-options")) { headersScore -= 1; tests.push({ id: "xfo-missing", name: "X-Frame-Options", category: "headers", status: "fail", severity: "critical", value: "Absent", recommendation: "Ajoutez X-Frame-Options: DENY.", deduction: 1 }); }
-    else { tests.push({ id: "xfo-ok", name: "X-Frame-Options", category: "headers", status: "pass", severity: "info", value: headers.get("x-frame-options")!, deduction: 0 }); }
+    // 1.1 Content-Security-Policy + sub-checks
+    const csp = headers.get("content-security-policy");
+    if (!csp) {
+      headersScore -= 1.5;
+      tests.push({ id: "csp-missing", name: "CSP", category: "headers", status: "fail", severity: "critical", value: "Absent", recommendation: "Ajoutez Content-Security-Policy.", deduction: 1.5 });
+    } else {
+      tests.push({ id: "csp-ok", name: "CSP", category: "headers", status: "pass", severity: "info", value: "Présent", deduction: 0 });
+      if (csp.includes("unsafe-inline")) { headersScore -= 0.5; tests.push({ id: "csp-unsafe-inline", name: "CSP: unsafe-inline", category: "headers", status: "warning", severity: "warning", value: "unsafe-inline affaiblit la protection XSS", recommendation: "Remplacez unsafe-inline par des nonces ou hashes.", deduction: 0.5 }); }
+      if (csp.includes("unsafe-eval")) { headersScore -= 0.5; tests.push({ id: "csp-unsafe-eval", name: "CSP: unsafe-eval", category: "headers", status: "warning", severity: "warning", value: "unsafe-eval permet l'exécution de code dynamique", recommendation: "Supprimez unsafe-eval et refactorisez le code utilisant eval().", deduction: 0.5 }); }
+      if (csp.includes("* ") || csp.includes(" *") || csp.match(/:\s*\*/)) { headersScore -= 0.3; tests.push({ id: "csp-wildcard", name: "CSP: wildcard", category: "headers", status: "warning", severity: "warning", value: "Wildcard (*) autorise toutes les sources", recommendation: "Restreignez les sources autorisées.", deduction: 0.3 }); }
+      if (!csp.includes("frame-ancestors")) { headersScore -= 0.2; tests.push({ id: "csp-no-frame-ancestors", name: "CSP: frame-ancestors absent", category: "headers", status: "warning", severity: "info", value: "frame-ancestors non défini", recommendation: "Ajoutez frame-ancestors 'self' dans votre CSP.", deduction: 0.2 }); }
+    }
 
+    // 1.2 X-Frame-Options
+    const xfo = headers.get("x-frame-options");
+    if (!xfo) { headersScore -= 1; tests.push({ id: "xfo-missing", name: "X-Frame-Options", category: "headers", status: "fail", severity: "critical", value: "Absent", recommendation: "Ajoutez X-Frame-Options: DENY.", deduction: 1 }); }
+    else {
+      const xfoVal = xfo.toUpperCase();
+      if (xfoVal !== "DENY" && xfoVal !== "SAMEORIGIN") { headersScore -= 0.3; tests.push({ id: "xfo-weak", name: "X-Frame-Options", category: "headers", status: "warning", severity: "warning", value: `Valeur non standard: ${xfo}`, recommendation: "Utilisez DENY ou SAMEORIGIN.", deduction: 0.3 }); }
+      else { tests.push({ id: "xfo-ok", name: "X-Frame-Options", category: "headers", status: "pass", severity: "info", value: xfo, deduction: 0 }); }
+    }
+
+    // 1.3 X-Content-Type-Options
     if (headers.get("x-content-type-options") !== "nosniff") { headersScore -= 0.5; tests.push({ id: "xcto-missing", name: "X-Content-Type-Options", category: "headers", status: "warning", severity: "warning", value: headers.get("x-content-type-options") || "Absent", recommendation: "Ajoutez X-Content-Type-Options: nosniff.", deduction: 0.5 }); }
     else { tests.push({ id: "xcto-ok", name: "X-Content-Type-Options", category: "headers", status: "pass", severity: "info", value: "nosniff", deduction: 0 }); }
 
+    // 1.4 HSTS + sub-checks
     const hsts = headers.get("strict-transport-security");
-    if (!hsts) { headersScore -= 1; tests.push({ id: "hsts-missing", name: "HSTS", category: "headers", status: "fail", severity: "critical", value: "Absent", recommendation: "Ajoutez Strict-Transport-Security.", deduction: 1 }); }
+    if (!hsts) { headersScore -= 1; tests.push({ id: "hsts-missing", name: "HSTS", category: "headers", status: "fail", severity: "critical", value: "Absent", recommendation: "Ajoutez Strict-Transport-Security: max-age=31536000; includeSubDomains; preload.", deduction: 1 }); }
     else {
       const maxAge = parseInt(hsts.match(/max-age=(\d+)/)?.[1] || "0");
       if (maxAge < 15768000) { headersScore -= 0.5; tests.push({ id: "hsts-short", name: "HSTS", category: "headers", status: "warning", severity: "warning", value: `max-age=${maxAge}`, deduction: 0.5 }); }
       else { tests.push({ id: "hsts-ok", name: "HSTS", category: "headers", status: "pass", severity: "info", value: hsts, deduction: 0 }); }
+      if (!hsts.toLowerCase().includes("includesubdomains")) { headersScore -= 0.2; tests.push({ id: "hsts-no-subdomains", name: "HSTS: includeSubDomains manquant", category: "headers", status: "warning", severity: "info", value: "includeSubDomains non défini", deduction: 0.2 }); }
     }
 
+    // 1.5-1.7 X-XSS-Protection, Referrer-Policy, Permissions-Policy
     if (!headers.get("x-xss-protection")) { headersScore -= 0.3; tests.push({ id: "xxss-missing", name: "X-XSS-Protection", category: "headers", status: "warning", severity: "warning", value: "Absent", deduction: 0.3 }); }
-    if (!headers.get("referrer-policy")) { headersScore -= 0.3; tests.push({ id: "referrer-missing", name: "Referrer-Policy", category: "headers", status: "warning", severity: "info", value: "Absent", deduction: 0.3 }); }
+    const referrer = headers.get("referrer-policy");
+    if (!referrer) { headersScore -= 0.3; tests.push({ id: "referrer-missing", name: "Referrer-Policy", category: "headers", status: "warning", severity: "info", value: "Absent", deduction: 0.3 }); }
+    else if (["unsafe-url", "no-referrer-when-downgrade"].includes(referrer.toLowerCase())) { headersScore -= 0.2; tests.push({ id: "referrer-weak", name: "Referrer-Policy faible", category: "headers", status: "warning", severity: "warning", value: referrer, recommendation: "Utilisez strict-origin-when-cross-origin ou no-referrer.", deduction: 0.2 }); }
     if (!headers.get("permissions-policy")) { headersScore -= 0.3; tests.push({ id: "permissions-missing", name: "Permissions-Policy", category: "headers", status: "warning", severity: "info", value: "Absent", deduction: 0.3 }); }
 
-    // === SSL ===
+    // 1.8-1.10 Cross-Origin policies (COEP, COOP, CORP)
+    if (!headers.get("cross-origin-embedder-policy")) { headersScore -= 0.2; tests.push({ id: "coep-missing", name: "Cross-Origin-Embedder-Policy", category: "headers", status: "warning", severity: "info", value: "Absent", recommendation: "Ajoutez COEP: require-corp.", deduction: 0.2 }); }
+    if (!headers.get("cross-origin-opener-policy")) { headersScore -= 0.2; tests.push({ id: "coop-missing", name: "Cross-Origin-Opener-Policy", category: "headers", status: "warning", severity: "info", value: "Absent", recommendation: "Ajoutez COOP: same-origin.", deduction: 0.2 }); }
+    if (!headers.get("cross-origin-resource-policy")) { headersScore -= 0.2; tests.push({ id: "corp-missing", name: "Cross-Origin-Resource-Policy", category: "headers", status: "warning", severity: "info", value: "Absent", recommendation: "Ajoutez CORP: same-origin.", deduction: 0.2 }); }
+
+    // 1.11-1.12 X-Permitted-Cross-Domain-Policies, X-Download-Options
+    if (!headers.get("x-permitted-cross-domain-policies")) { headersScore -= 0.1; tests.push({ id: "xpcdp-missing", name: "X-Permitted-Cross-Domain-Policies", category: "headers", status: "warning", severity: "info", value: "Absent", deduction: 0.1 }); }
+    if (!headers.get("x-download-options")) { headersScore -= 0.1; tests.push({ id: "xdo-missing", name: "X-Download-Options", category: "headers", status: "warning", severity: "info", value: "Absent", deduction: 0.1 }); }
+
+    // 1.13 Cache-Control
+    const cacheControl = headers.get("cache-control");
+    if (!cacheControl || (!cacheControl.includes("no-store") && !cacheControl.includes("private"))) { headersScore -= 0.2; tests.push({ id: "cache-control-weak", name: "Cache-Control", category: "headers", status: "warning", severity: "info", value: cacheControl || "Absent", recommendation: "Utilisez Cache-Control: no-store ou private pour les pages sensibles.", deduction: 0.2 }); }
+
+    // ═══════════════════════════════════════════
+    // CATEGORY 2: SSL/TLS (4 tests)
+    // ═══════════════════════════════════════════
+
     if (targetUrl.startsWith("https://")) {
       tests.push({ id: "ssl-https", name: "HTTPS", category: "ssl", status: "pass", severity: "info", value: "Oui", deduction: 0 });
+
+      // HTTP redirect check
       const httpRes = await fetchWithTimeout(targetUrl.replace("https://", "http://"), { redirect: "manual", headers: { "User-Agent": "AIFriendly/1.0" } });
       if (httpRes) {
         const loc = httpRes.headers.get("location") || "";
@@ -478,60 +521,340 @@ async function scanSecurity(targetUrl: string) {
           sslScore -= 1; tests.push({ id: "http-no-redirect", name: "HTTP→HTTPS redirect", category: "ssl", status: "warning", severity: "warning", value: "Pas de redirection", deduction: 1 });
         }
       }
+
+      // Mixed content detection
+      const httpResources: string[] = [];
+      $("script[src], link[href], img[src], iframe[src], video[src], audio[src], source[src]").each((_, el) => {
+        const src = $(el).attr("src") || $(el).attr("href") || "";
+        if (src.startsWith("http://") && !src.includes("localhost")) httpResources.push(src.slice(0, 80));
+      });
+      if (httpResources.length > 0) {
+        sslScore -= 1.5;
+        tests.push({ id: "mixed-content", name: "Contenu mixte (HTTP sur HTTPS)", category: "ssl", status: "fail", severity: "critical", value: `${httpResources.length} ressource(s) HTTP`, recommendation: "Chargez toutes les ressources via HTTPS.", deduction: 1.5 });
+      }
+
+      // SRI check for external scripts
+      let externalNoSri = 0, totalExternal = 0;
+      $("script[src], link[rel='stylesheet'][href]").each((_, el) => {
+        const src = $(el).attr("src") || $(el).attr("href") || "";
+        if (src.startsWith("http") && !src.includes(new URL(targetUrl).hostname)) {
+          totalExternal++;
+          if (!$(el).attr("integrity")) externalNoSri++;
+        }
+      });
+      if (externalNoSri > 0) { sslScore -= 0.5; tests.push({ id: "sri-missing", name: "SRI manquant", category: "ssl", status: "warning", severity: "warning", value: `${externalNoSri}/${totalExternal} sans integrity`, recommendation: "Ajoutez l'attribut integrity aux ressources externes.", deduction: 0.5 }); }
     } else {
       sslScore -= 2; tests.push({ id: "no-https", name: "HTTPS", category: "ssl", status: "fail", severity: "critical", value: "Non", recommendation: "Migrez vers HTTPS.", deduction: 2 });
     }
 
-    // === INFO LEAKS ===
-    if (headers.get("server")) { infoLeakScore -= 0.3; tests.push({ id: "server-exposed", name: "Server header", category: "info_leak", status: "warning", severity: "info", value: headers.get("server")!, deduction: 0.3 }); }
+    // ═══════════════════════════════════════════
+    // CATEGORY 3: Information Leaks (16+ tests)
+    // ═══════════════════════════════════════════
+
+    // Server header + version detection
+    const server = headers.get("server");
+    if (server) {
+      const hasVersion = /\d+\.\d+/.test(server);
+      const ded = hasVersion ? 0.5 : 0.3;
+      infoLeakScore -= ded;
+      tests.push({ id: "server-exposed", name: "Server header", category: "info_leak", status: hasVersion ? "fail" : "warning", severity: hasVersion ? "warning" : "info", value: server, recommendation: "Masquez le header Server.", deduction: ded });
+    }
+
+    // X-Powered-By
     if (headers.get("x-powered-by")) { infoLeakScore -= 0.5; tests.push({ id: "powered-by", name: "X-Powered-By", category: "info_leak", status: "warning", severity: "warning", value: headers.get("x-powered-by")!, recommendation: "Supprimez X-Powered-By.", deduction: 0.5 }); }
 
-    const sensitiveFiles = ["/.env", "/.git/HEAD", "/wp-config.php"];
-    for (const path of sensitiveFiles) {
-      const fileRes = await fetchWithTimeout(new URL(path, baseUrl).href, { headers: { "User-Agent": "AIFriendly/1.0" } }, 5000);
+    // ASP.NET version
+    const aspnetVer = headers.get("x-aspnet-version") || headers.get("x-aspnetmvc-version");
+    if (aspnetVer) { infoLeakScore -= 0.3; tests.push({ id: "aspnet-version", name: "Version ASP.NET exposée", category: "info_leak", status: "warning", severity: "warning", value: aspnetVer, deduction: 0.3 }); }
+
+    // Sensitive files (expanded)
+    const sensitiveFiles = [
+      { path: "/.env", sev: "critical" }, { path: "/.env.local", sev: "critical" }, { path: "/.env.production", sev: "critical" },
+      { path: "/.git/HEAD", sev: "critical" }, { path: "/.git/config", sev: "critical" }, { path: "/.svn/entries", sev: "critical" },
+      { path: "/wp-config.php", sev: "critical" }, { path: "/wp-config.php.bak", sev: "critical" },
+      { path: "/.htpasswd", sev: "critical" }, { path: "/phpinfo.php", sev: "critical" },
+      { path: "/.npmrc", sev: "critical" }, { path: "/backup.sql", sev: "critical" }, { path: "/dump.sql", sev: "critical" },
+      { path: "/credentials.json", sev: "critical" },
+      { path: "/.htaccess", sev: "warning" }, { path: "/.DS_Store", sev: "warning" },
+      { path: "/web.config", sev: "warning" }, { path: "/composer.json", sev: "warning" },
+      { path: "/package.json", sev: "warning" }, { path: "/docker-compose.yml", sev: "warning" },
+      { path: "/error_log", sev: "warning" }, { path: "/debug.log", sev: "warning" },
+    ];
+    const fileChecks = sensitiveFiles.map(async (file) => {
+      const fileRes = await fetchWithTimeout(new URL(file.path, baseUrl).href, { headers: { "User-Agent": "AIFriendly/1.0" } }, 5000);
       if (fileRes && fileRes.status === 200) {
         const ct = fileRes.headers.get("content-type") || "";
         if (!ct.includes("text/html")) {
-          infoLeakScore -= 2;
-          tests.push({ id: `sensitive-${path}`, name: `Fichier sensible: ${path}`, category: "info_leak", status: "fail", severity: "critical", value: "Accessible", recommendation: `Bloquez l'accès à ${path}.`, deduction: 2 });
+          const ded = file.sev === "critical" ? 2 : 0.5;
+          infoLeakScore -= ded;
+          tests.push({ id: `sensitive-${file.path}`, name: `Fichier sensible: ${file.path}`, category: "info_leak", status: "fail", severity: file.sev as "critical" | "warning", value: "Accessible", recommendation: `Bloquez l'accès à ${file.path}.`, deduction: ded });
+        }
+      }
+    });
+    await Promise.allSettled(fileChecks);
+
+    // Admin panels
+    const adminPaths = ["/admin", "/admin/", "/administrator", "/wp-admin", "/wp-login.php", "/phpmyadmin", "/adminer.php", "/cpanel"];
+    const adminChecks = adminPaths.map(async (path) => {
+      const adminRes = await fetchWithTimeout(new URL(path, baseUrl).href, { redirect: "manual", headers: { "User-Agent": "AIFriendly/1.0" } }, 5000);
+      if (adminRes && (adminRes.status === 200 || adminRes.status === 401 || adminRes.status === 403)) {
+        infoLeakScore -= 0.3;
+        tests.push({ id: `admin-${path.replace(/\//g, "-")}`, name: `Admin: ${path}`, category: "info_leak", status: "warning", severity: "warning", value: `HTTP ${adminRes.status}`, recommendation: `Restreignez l'accès à ${path} par IP/VPN.`, deduction: 0.3 });
+      }
+    });
+    await Promise.allSettled(adminChecks);
+
+    // API docs exposed
+    const apiDocPaths = ["/swagger", "/swagger-ui", "/swagger-ui.html", "/api-docs", "/graphql", "/graphiql"];
+    const apiChecks = apiDocPaths.map(async (path) => {
+      const apiRes = await fetchWithTimeout(new URL(path, baseUrl).href, { headers: { "User-Agent": "AIFriendly/1.0" } }, 5000);
+      if (apiRes && apiRes.status === 200) {
+        infoLeakScore -= 0.5;
+        tests.push({ id: `api-docs-${path.replace(/\//g, "-")}`, name: `API docs: ${path}`, category: "info_leak", status: "warning", severity: "warning", value: "Accessible", recommendation: `Protégez ${path} par authentification.`, deduction: 0.5 });
+      }
+    });
+    await Promise.allSettled(apiChecks);
+
+    // Directory listing
+    for (const dirPath of ["/icons/", "/images/", "/uploads/", "/static/"]) {
+      const dirRes = await fetchWithTimeout(new URL(dirPath, baseUrl).href, { headers: { "User-Agent": "AIFriendly/1.0" } }, 5000);
+      if (dirRes && dirRes.status === 200) {
+        const dirBody = await dirRes.text();
+        if (dirBody.includes("Index of") || dirBody.includes("Directory listing") || dirBody.includes("[To Parent Directory]")) {
+          infoLeakScore -= 1;
+          tests.push({ id: `dir-listing`, name: `Directory listing: ${dirPath}`, category: "info_leak", status: "fail", severity: "critical", value: "Activé", recommendation: "Désactivez le directory listing.", deduction: 1 });
+          break;
         }
       }
     }
 
-    // === COOKIES ===
+    // robots.txt sensitive paths
+    const robotsRes = await fetchWithTimeout(new URL("/robots.txt", baseUrl).href, { headers: { "User-Agent": "AIFriendly/1.0" } }, 5000);
+    if (robotsRes && robotsRes.status === 200) {
+      const robotsTxt = await robotsRes.text();
+      const exposed = ["/admin", "/api/internal", "/backup", "/phpmyadmin", "/cpanel", "/wp-admin", "/private", "/secret", "/database"].filter(p => robotsTxt.toLowerCase().includes(p));
+      if (exposed.length > 0) { infoLeakScore -= 0.5; tests.push({ id: "robots-sensitive", name: "robots.txt expose chemins sensibles", category: "info_leak", status: "warning", severity: "warning", value: exposed.join(", "), deduction: 0.5 }); }
+    }
+
+    // HTML comments with sensitive info
+    const commentRegex = /<!--([\s\S]*?)-->/g;
+    let commentMatch;
+    const sensitiveKw = ["password", "pwd", "secret", "api_key", "apikey", "token", "credentials", "private_key", "access_key"];
+    while ((commentMatch = commentRegex.exec(html)) !== null) {
+      if (sensitiveKw.some(kw => commentMatch![1].toLowerCase().includes(kw))) {
+        infoLeakScore -= 1.5;
+        tests.push({ id: "html-comments-sensitive", name: "Commentaires HTML sensibles", category: "info_leak", status: "fail", severity: "critical", value: "Termes sensibles dans les commentaires HTML", recommendation: "Supprimez les commentaires contenant des infos sensibles.", deduction: 1.5 });
+        break;
+      }
+    }
+
+    // Meta generator
+    const generator = $('meta[name="generator"]').attr("content");
+    if (generator) { infoLeakScore -= 0.3; tests.push({ id: "meta-generator", name: "Meta generator", category: "info_leak", status: "warning", severity: "warning", value: generator, recommendation: "Supprimez la balise meta generator.", deduction: 0.3 }); }
+
+    // Stack trace detection
+    const stackPatterns = ["Traceback (most recent call last)", "Fatal error:", "Stack trace:", "java.lang.", "System.NullReferenceException", "Warning: mysql_", "Warning: pg_", "Parse error: syntax error", "SQLSTATE"];
+    if (stackPatterns.some(p => html.includes(p))) {
+      infoLeakScore -= 2;
+      tests.push({ id: "stack-trace", name: "Stack trace exposée", category: "info_leak", status: "fail", severity: "critical", value: "Traces d'erreur visibles dans le HTML", recommendation: "Désactivez le mode debug en production.", deduction: 2 });
+    }
+
+    // Source maps
+    if (html.includes("sourceMappingURL")) { infoLeakScore -= 0.5; tests.push({ id: "source-maps", name: "Source maps exposées", category: "info_leak", status: "warning", severity: "warning", value: "sourceMappingURL détecté", recommendation: "Supprimez les source maps en production.", deduction: 0.5 }); }
+
+    // security.txt
+    const secTxtRes = await fetchWithTimeout(new URL("/.well-known/security.txt", baseUrl).href, { headers: { "User-Agent": "AIFriendly/1.0" } }, 5000);
+    if (!secTxtRes || secTxtRes.status !== 200) {
+      tests.push({ id: "security-txt-missing", name: "security.txt", category: "info_leak", status: "warning", severity: "info", value: "Absent", recommendation: "Créez /.well-known/security.txt (RFC 9116).", deduction: 0 });
+    }
+
+    // Server status pages
+    for (const path of ["/server-status", "/server-info"]) {
+      const sRes = await fetchWithTimeout(new URL(path, baseUrl).href, { headers: { "User-Agent": "AIFriendly/1.0" } }, 5000);
+      if (sRes && sRes.status === 200) {
+        const body = await sRes.text();
+        if (body.includes("Apache") || body.includes("Server Version")) {
+          infoLeakScore -= 1;
+          tests.push({ id: `server-page-${path.slice(1)}`, name: `Page serveur: ${path}`, category: "info_leak", status: "fail", severity: "critical", value: "Accessible", recommendation: `Bloquez l'accès à ${path}.`, deduction: 1 });
+        }
+      }
+    }
+
+    // ═══════════════════════════════════════════
+    // CATEGORY 4: Cookies (6 tests)
+    // ═══════════════════════════════════════════
+
     const setCookies = res.headers.getSetCookie?.() || [];
     if (setCookies.length > 0) {
-      let insecure = false, noHttpOnly = false, noSameSite = false;
+      let insecure = false, noHttpOnly = false, noSameSite = false, weakSameSite = false, noPrefixes = false;
+      const sessionNames: string[] = [];
+
       for (const c of setCookies) {
         const l = c.toLowerCase();
+        const name = c.split("=")[0].trim();
         if (!l.includes("secure")) insecure = true;
         if (!l.includes("httponly")) noHttpOnly = true;
         if (!l.includes("samesite")) noSameSite = true;
+        else if (l.includes("samesite=none")) weakSameSite = true;
+
+        const isSession = ["session", "sess", "sid", "token", "auth", "jwt"].some(s => name.toLowerCase().includes(s));
+        if (isSession) {
+          sessionNames.push(name);
+          if (!name.startsWith("__Secure-") && !name.startsWith("__Host-")) noPrefixes = true;
+        }
       }
-      if (insecure) { cookiesScore -= 1; tests.push({ id: "cookie-insecure", name: "Cookie Secure", category: "cookies", status: "fail", severity: "critical", value: "Absent", deduction: 1 }); }
-      if (noHttpOnly) { cookiesScore -= 0.5; tests.push({ id: "cookie-httponly", name: "Cookie HttpOnly", category: "cookies", status: "warning", severity: "warning", value: "Absent", deduction: 0.5 }); }
-      if (noSameSite) { cookiesScore -= 0.5; tests.push({ id: "cookie-samesite", name: "Cookie SameSite", category: "cookies", status: "warning", severity: "warning", value: "Absent", deduction: 0.5 }); }
+
+      if (insecure) { cookiesScore -= 1; tests.push({ id: "cookie-insecure", name: "Cookie Secure", category: "cookies", status: "fail", severity: "critical", value: "Absent", recommendation: "Ajoutez le flag Secure.", deduction: 1 }); }
+      if (noHttpOnly) { cookiesScore -= 0.5; tests.push({ id: "cookie-httponly", name: "Cookie HttpOnly", category: "cookies", status: "warning", severity: "warning", value: "Absent", recommendation: "Ajoutez HttpOnly.", deduction: 0.5 }); }
+      if (noSameSite) { cookiesScore -= 0.5; tests.push({ id: "cookie-samesite", name: "Cookie SameSite", category: "cookies", status: "warning", severity: "warning", value: "Absent", recommendation: "Ajoutez SameSite=Strict ou Lax.", deduction: 0.5 }); }
+      if (weakSameSite) { cookiesScore -= 0.3; tests.push({ id: "cookie-samesite-none", name: "Cookie SameSite=None", category: "cookies", status: "warning", severity: "warning", value: "SameSite=None", recommendation: "Utilisez SameSite=Strict ou Lax.", deduction: 0.3 }); }
+      if (noPrefixes && sessionNames.length > 0) { cookiesScore -= 0.2; tests.push({ id: "cookie-no-prefix", name: "Cookies session sans préfixe", category: "cookies", status: "warning", severity: "info", value: sessionNames.join(", "), recommendation: "Utilisez __Secure- ou __Host- pour les cookies sensibles.", deduction: 0.2 }); }
     }
 
-    // === INJECTION ===
+    // ═══════════════════════════════════════════
+    // CATEGORY 5: Injection / XSS (12+ tests)
+    // ═══════════════════════════════════════════
+
+    // CSRF check
     const forms = $("form");
     if (forms.length > 0) {
       let noCSRF = 0;
       forms.each((_, form) => {
         const $f = $(form);
-        if ($f.attr("method")?.toLowerCase() === "post" && $f.find('input[name*="csrf"], input[name*="token"], input[name*="_token"]').length === 0) noCSRF++;
+        if ($f.attr("method")?.toLowerCase() === "post" && $f.find('input[name*="csrf"], input[name*="token"], input[name*="_token"], input[name*="nonce"]').length === 0) noCSRF++;
       });
-      if (noCSRF > 0) { injectionScore -= 1; tests.push({ id: "no-csrf", name: "CSRF", category: "injection", status: "fail", severity: "critical", value: `${noCSRF} form(s) sans CSRF`, deduction: 1 }); }
+      if (noCSRF > 0) { injectionScore -= 1; tests.push({ id: "no-csrf", name: "CSRF", category: "injection", status: "fail", severity: "critical", value: `${noCSRF} form(s) sans CSRF`, recommendation: "Ajoutez un token CSRF.", deduction: 1 }); }
     }
 
+    // Reflected XSS
     const xssUrl = new URL(targetUrl);
     const canary = "aifriendly_probe_12345";
     xssUrl.searchParams.set("q", canary);
+    xssUrl.searchParams.set("search", canary);
     const xssRes = await fetchWithTimeout(xssUrl.href, { headers: { "User-Agent": "AIFriendly/1.0" } }, 10000);
     if (xssRes) {
       const xssBody = await xssRes.text();
-      if (xssBody.includes(canary)) { injectionScore -= 1.5; tests.push({ id: "reflected", name: "XSS réfléchi", category: "injection", status: "fail", severity: "critical", value: "Entrée réfléchie détectée", deduction: 1.5 }); }
+      if (xssBody.includes(canary)) {
+        const isInTag = xssBody.includes(`"${canary}"`) || xssBody.includes(`'${canary}'`) || xssBody.includes(`=${canary}`);
+        injectionScore -= isInTag ? 2 : 1;
+        tests.push({ id: "reflected", name: "XSS réfléchi", category: "injection", status: "fail", severity: "critical", value: isInTag ? "Réfléchi dans un attribut HTML" : "Entrée réfléchie détectée", recommendation: "Échappez toutes les entrées utilisateur.", deduction: isInTag ? 2 : 1 });
+      }
     }
+
+    // HTML injection
+    const htmlCanary = "<b>aifriendly_html_test</b>";
+    const htmlUrl = new URL(targetUrl);
+    htmlUrl.searchParams.set("q", htmlCanary);
+    const htmlRes = await fetchWithTimeout(htmlUrl.href, { headers: { "User-Agent": "AIFriendly/1.0" } }, 10000);
+    if (htmlRes) {
+      const htmlBody = await htmlRes.text();
+      if (htmlBody.includes(htmlCanary)) { injectionScore -= 1.5; tests.push({ id: "html-injection", name: "Injection HTML", category: "injection", status: "fail", severity: "critical", value: "HTML injecté rendu sans échappement", recommendation: "Échappez toutes les entrées.", deduction: 1.5 }); }
+    }
+
+    // Open redirect (expanded params)
+    const redirectParams = ["redirect", "url", "next", "return", "returnUrl", "return_to", "goto", "continue", "dest", "destination", "redir", "redirect_uri", "callback"];
+    let openRedirectFound = false;
+    for (const param of redirectParams) {
+      if (openRedirectFound) break;
+      const redUrl = new URL(targetUrl);
+      redUrl.searchParams.set(param, "https://evil.com");
+      const redRes = await fetchWithTimeout(redUrl.href, { redirect: "manual", headers: { "User-Agent": "AIFriendly/1.0" } }, 10000);
+      if (redRes && redRes.status >= 300 && redRes.status < 400) {
+        const loc = redRes.headers.get("location") || "";
+        if (loc.includes("evil.com")) {
+          injectionScore -= 1;
+          tests.push({ id: "open-redirect", name: "Open redirect", category: "injection", status: "fail", severity: "critical", value: `Via paramètre '${param}'`, recommendation: "Validez les URLs de redirection avec une whitelist.", deduction: 1 });
+          openRedirectFound = true;
+        }
+      }
+    }
+
+    // SQL injection (error-based)
+    const sqlPayloads = ["'", "1' OR '1'='1", "1; DROP TABLE"];
+    const sqlErrors = ["SQL syntax", "mysql_fetch", "pg_query", "ORA-", "SQLSTATE", "unterminated quoted string", "valid MySQL result", "PostgreSQL query failed"];
+    let sqlFound = false;
+    for (const payload of sqlPayloads) {
+      if (sqlFound) break;
+      const sqlUrl = new URL(targetUrl);
+      sqlUrl.searchParams.set("id", payload);
+      const sqlRes = await fetchWithTimeout(sqlUrl.href, { headers: { "User-Agent": "AIFriendly/1.0" } }, 10000);
+      if (sqlRes) {
+        const sqlBody = await sqlRes.text();
+        if (sqlErrors.some(p => sqlBody.includes(p))) {
+          injectionScore -= 2;
+          tests.push({ id: "sql-injection", name: "Injection SQL potentielle", category: "injection", status: "fail", severity: "critical", value: "Erreurs SQL en réponse à des caractères spéciaux", recommendation: "Utilisez des requêtes préparées.", deduction: 2 });
+          sqlFound = true;
+        }
+      }
+    }
+
+    // Path traversal
+    const ptUrl = new URL(targetUrl);
+    ptUrl.searchParams.set("file", "../../etc/passwd");
+    const ptRes = await fetchWithTimeout(ptUrl.href, { headers: { "User-Agent": "AIFriendly/1.0" } }, 10000);
+    if (ptRes) {
+      const ptBody = await ptRes.text();
+      if (ptBody.includes("root:x:") || ptBody.includes("/bin/bash")) {
+        injectionScore -= 2;
+        tests.push({ id: "path-traversal", name: "Path traversal", category: "injection", status: "fail", severity: "critical", value: "Fichiers système accessibles via chemins relatifs", recommendation: "Validez et assainissez tous les chemins de fichiers.", deduction: 2 });
+      }
+    }
+
+    // CORS misconfiguration
+    const corsRes = await fetchWithTimeout(targetUrl, { headers: { "User-Agent": "AIFriendly/1.0", "Origin": "https://evil-attacker.com" } }, 10000);
+    if (corsRes) {
+      const acao = corsRes.headers.get("access-control-allow-origin");
+      const acac = corsRes.headers.get("access-control-allow-credentials");
+      if (acao === "*") { injectionScore -= 0.5; tests.push({ id: "cors-wildcard", name: "CORS wildcard", category: "injection", status: "warning", severity: "warning", value: "Access-Control-Allow-Origin: *", recommendation: "Restreignez CORS aux domaines de confiance.", deduction: 0.5 }); }
+      else if (acao?.includes("evil-attacker.com")) {
+        injectionScore -= 1.5;
+        tests.push({ id: "cors-reflection", name: "CORS réflexion d'origine", category: "injection", status: "fail", severity: "critical", value: "Le serveur reflète toute origine", recommendation: "Utilisez une whitelist stricte.", deduction: 1.5 });
+        if (acac === "true") { injectionScore -= 0.5; tests.push({ id: "cors-credentials", name: "CORS + credentials", category: "injection", status: "fail", severity: "critical", value: "Allow-Credentials:true + réflexion", recommendation: "Ne combinez jamais réflexion d'origine avec credentials:true.", deduction: 0.5 }); }
+      }
+    }
+
+    // TRACE method
+    const traceRes = await fetchWithTimeout(targetUrl, { method: "TRACE", headers: { "User-Agent": "AIFriendly/1.0" } }, 10000);
+    if (traceRes && traceRes.status === 200) {
+      const traceBody = await traceRes.text();
+      if (traceBody.includes("TRACE")) { injectionScore -= 0.5; tests.push({ id: "trace-enabled", name: "TRACE activé (XST)", category: "injection", status: "fail", severity: "warning", value: "Méthode TRACE activée", recommendation: "Désactivez TRACE.", deduction: 0.5 }); }
+    }
+
+    // Dangerous HTTP methods
+    for (const method of ["PUT", "DELETE"]) {
+      const mRes = await fetchWithTimeout(targetUrl, { method, headers: { "User-Agent": "AIFriendly/1.0" } }, 10000);
+      if (mRes && [200, 201, 204].includes(mRes.status)) { injectionScore -= 0.5; tests.push({ id: `method-${method.toLowerCase()}`, name: `Méthode ${method} autorisée`, category: "injection", status: "warning", severity: "warning", value: `HTTP ${mRes.status}`, recommendation: `Restreignez ${method} par authentification.`, deduction: 0.5 }); }
+    }
+
+    // DOM XSS indicators
+    const domPatterns = ["document.write(", ".innerHTML =", ".innerHTML=", ".outerHTML =", "eval("];
+    const foundDom = domPatterns.filter(p => html.includes(p));
+    if (foundDom.length > 0) { injectionScore -= 0.5; tests.push({ id: "dom-xss", name: "Patterns DOM XSS", category: "injection", status: "warning", severity: "warning", value: foundDom.join(", "), recommendation: "Utilisez textContent et les API DOM sécurisées.", deduction: 0.5 }); }
+
+    // JSONP detection
+    const jsonpRes = await fetchWithTimeout(`${targetUrl}${targetUrl.includes("?") ? "&" : "?"}callback=aifriendly_jsonp_test`, { headers: { "User-Agent": "AIFriendly/1.0" } }, 10000);
+    if (jsonpRes) {
+      const jsonpBody = await jsonpRes.text();
+      if (jsonpBody.includes("aifriendly_jsonp_test(")) { injectionScore -= 0.5; tests.push({ id: "jsonp", name: "Endpoint JSONP", category: "injection", status: "warning", severity: "warning", value: "Endpoint JSONP détecté", recommendation: "Remplacez JSONP par CORS.", deduction: 0.5 }); }
+    }
+
+    // External form actions
+    let extForms = 0;
+    $("form[action]").each((_, form) => {
+      const action = $(form).attr("action") || "";
+      if (action.startsWith("http") && !action.includes(new URL(targetUrl).hostname)) extForms++;
+    });
+    if (extForms > 0) { injectionScore -= 0.5; tests.push({ id: "external-form", name: "Formulaires vers domaine externe", category: "injection", status: "warning", severity: "warning", value: `${extForms} formulaire(s)`, recommendation: "Vérifiez la légitimité des domaines externes.", deduction: 0.5 }); }
+
+    // Passwords on HTTP
+    if (!targetUrl.startsWith("https://") && $('input[type="password"]').length > 0) {
+      injectionScore -= 1;
+      tests.push({ id: "password-no-https", name: "Mots de passe sans HTTPS", category: "injection", status: "fail", severity: "critical", value: "Champs password sur HTTP", recommendation: "Les formulaires de connexion doivent être en HTTPS.", deduction: 1 });
+    }
+
+    // Charset in Content-Type
+    const ct = headers.get("content-type");
+    if (ct && !ct.includes("charset")) { injectionScore -= 0.1; tests.push({ id: "no-charset", name: "Charset absent", category: "injection", status: "warning", severity: "info", value: ct, recommendation: "Ajoutez charset=utf-8.", deduction: 0.1 }); }
 
   } catch (err) {
     clearTimeout(timeout);
