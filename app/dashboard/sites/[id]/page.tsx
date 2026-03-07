@@ -148,6 +148,126 @@ function ScoreChart({ entries, onClickEntry }: { entries: { id: string; score: n
   );
 }
 
+// ─── Line Chart (SVG) ────────────────────────────────────────────────────────
+
+function LineChart({
+  title,
+  series,
+  yMax: yMaxProp,
+  ySteps = 5,
+  formatY = (v: number) => `${v}`,
+  onClickPoint,
+}: {
+  title: string;
+  series: { label: string; color: string; data: { id: string; value: number; date: string }[] }[];
+  yMax?: number;
+  ySteps?: number;
+  formatY?: (v: number) => string;
+  onClickPoint?: (id: string) => void;
+}) {
+  const [hovered, setHovered] = useState<{ si: number; pi: number } | null>(null);
+
+  const allValues = series.flatMap(s => s.data.map(d => d.value));
+  if (allValues.length === 0) return null;
+
+  const yMax = yMaxProp ?? Math.max(Math.ceil(Math.max(...allValues) * 1.1), 1);
+  const pad = { top: 12, right: 20, bottom: 28, left: 45 };
+  const cw = 600, ch = 150;
+  const w = cw + pad.left + pad.right, h = ch + pad.top + pad.bottom;
+
+  const plotSeries = series.map(s => ({
+    ...s,
+    data: s.data.slice().reverse().slice(-30),
+  }));
+
+  return (
+    <div className="rounded-2xl bg-luxe-bg-elevated border border-luxe-border shadow-luxe overflow-hidden">
+      <div className="px-6 py-4 border-b border-luxe-border bg-luxe-bg-muted/50 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <h2 className="font-display text-base font-semibold text-luxe-fg">{title}</h2>
+        <div className="flex flex-wrap gap-3">
+          {series.map((s, i) => (
+            <div key={i} className="flex items-center gap-1.5 text-xs text-luxe-fg-muted">
+              <span className="inline-block w-3 h-[3px] rounded-full" style={{ backgroundColor: s.color }} />
+              {s.label}
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="p-4 sm:p-6">
+        <svg viewBox={`0 0 ${w} ${h}`} className="w-full" preserveAspectRatio="xMidYMid meet">
+          {/* Grid lines + Y labels */}
+          {Array.from({ length: ySteps + 1 }, (_, i) => {
+            const val = (yMax / ySteps) * i;
+            const y = pad.top + ch - (val / yMax) * ch;
+            return (
+              <g key={i}>
+                <line x1={pad.left} y1={y} x2={w - pad.right} y2={y}
+                  stroke="#374151" strokeWidth="0.5" strokeDasharray={i === 0 ? "0" : "3,3"} opacity="0.4" />
+                <text x={pad.left - 8} y={y + 3} textAnchor="end" fontSize="9" fill="#9CA3AF">
+                  {formatY(val)}
+                </text>
+              </g>
+            );
+          })}
+
+          {/* Data lines + dots */}
+          {plotSeries.map((s, si) => {
+            if (s.data.length === 0) return null;
+            const pts = s.data.map((d, i) => ({
+              x: pad.left + (s.data.length === 1 ? cw / 2 : (i / (s.data.length - 1)) * cw),
+              y: pad.top + ch - (Math.min(d.value, yMax) / yMax) * ch,
+              ...d,
+            }));
+            const line = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ");
+            const area = `${line} L${pts[pts.length - 1].x},${pad.top + ch} L${pts[0].x},${pad.top + ch} Z`;
+            return (
+              <g key={si}>
+                <path d={area} fill={s.color} opacity="0.06" />
+                <path d={line} fill="none" stroke={s.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.85" />
+                {pts.map((p, pi) => (
+                  <g key={pi}>
+                    <circle cx={p.x} cy={p.y} r={hovered?.si === si && hovered?.pi === pi ? 5 : 2.5}
+                      fill={s.color} opacity={hovered?.si === si && hovered?.pi === pi ? 1 : 0.7}
+                      style={{ cursor: "pointer" }}
+                      onMouseEnter={() => setHovered({ si, pi })}
+                      onMouseLeave={() => setHovered(null)}
+                      onClick={() => onClickPoint?.(p.id)} />
+                    {hovered?.si === si && hovered?.pi === pi && (
+                      <g>
+                        <rect x={p.x - 55} y={p.y - 30} width="110" height="20" rx="4"
+                          fill="#1F2937" stroke="#374151" strokeWidth="0.5" />
+                        <text x={p.x} y={p.y - 16} textAnchor="middle" fontSize="9" fill={s.color} fontWeight="600">
+                          {formatY(p.value)} — {new Date(p.date).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}
+                        </text>
+                      </g>
+                    )}
+                  </g>
+                ))}
+              </g>
+            );
+          })}
+
+          {/* X-axis date labels */}
+          {plotSeries[0]?.data.length > 0 && (() => {
+            const d = plotSeries[0].data;
+            const idxs = d.length <= 5 ? d.map((_, i) => i) :
+              d.length <= 10 ? [0, Math.floor(d.length / 3), Math.floor(2 * d.length / 3), d.length - 1] :
+              [0, Math.floor(d.length / 4), Math.floor(d.length / 2), Math.floor(3 * d.length / 4), d.length - 1];
+            return idxs.map(i => {
+              const x = pad.left + (d.length === 1 ? cw / 2 : (i / (d.length - 1)) * cw);
+              return (
+                <text key={i} x={x} y={h - 5} textAnchor="middle" fontSize="8" fill="#9CA3AF">
+                  {new Date(d[i].date).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}
+                </text>
+              );
+            });
+          })()}
+        </svg>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Page ──────────────────────────────────────────────────────────────
 
 export default function SiteDetailPage() {
@@ -415,6 +535,29 @@ function AvailabilityTab({ checks, selectedCheck, checking, loadingDetail, onChe
 
       <ScoreChart entries={checks.map(c => ({ id: c.id, score: c.score, createdAt: c.createdAt }))} onClickEntry={onViewDetail} />
 
+      {/* Tendance du score de disponibilité (line chart) */}
+      <LineChart
+        title="Tendance du score de disponibilité"
+        yMax={10}
+        series={[
+          { label: "Score", color: "#22C55E", data: checks.map(c => ({ id: c.id, value: c.score, date: c.createdAt })) },
+        ]}
+        onClickPoint={onViewDetail}
+      />
+
+      {/* Tendance des temps de réponse */}
+      {checks.some(c => c.pingMs !== null || c.loadTimeMs !== null) && (
+        <LineChart
+          title="Temps de réponse"
+          formatY={(v) => `${Math.round(v)}ms`}
+          series={[
+            { label: "Ping", color: "#60A5FA", data: checks.filter(c => c.pingMs !== null).map(c => ({ id: c.id, value: c.pingMs!, date: c.createdAt })) },
+            { label: "Chargement", color: "#F59E0B", data: checks.filter(c => c.loadTimeMs !== null).map(c => ({ id: c.id, value: c.loadTimeMs!, date: c.createdAt })) },
+          ]}
+          onClickPoint={onViewDetail}
+        />
+      )}
+
       <div className="rounded-2xl bg-luxe-bg-elevated border border-luxe-border shadow-luxe overflow-hidden">
         <div className="px-6 py-4 border-b border-luxe-border bg-luxe-bg-muted/50">
           <h3 className="font-display text-lg font-semibold text-luxe-fg">Historique des checks</h3>
@@ -512,6 +655,23 @@ function SecurityTab({ scans, selectedScan, scanning, loadingDetail, onScan, onV
       )}
 
       <ScoreChart entries={scans.map(s => ({ id: s.id, score: s.score, createdAt: s.createdAt }))} onClickEntry={onViewDetail} />
+
+      {/* Tendance des scores de sécurité (multi-line chart) */}
+      {scans.length > 0 && (
+        <LineChart
+          title="Tendance des scores de sécurité"
+          yMax={10}
+          series={[
+            { label: "Global", color: "#F59E0B", data: scans.map(s => ({ id: s.id, value: s.score, date: s.createdAt })) },
+            { label: "Headers", color: "#60A5FA", data: scans.map(s => ({ id: s.id, value: s.headersScore, date: s.createdAt })) },
+            { label: "SSL", color: "#34D399", data: scans.map(s => ({ id: s.id, value: s.sslScore, date: s.createdAt })) },
+            { label: "Cookies", color: "#A78BFA", data: scans.map(s => ({ id: s.id, value: s.cookiesScore, date: s.createdAt })) },
+            { label: "Fuites", color: "#FB923C", data: scans.map(s => ({ id: s.id, value: s.infoLeakScore, date: s.createdAt })) },
+            { label: "Injection", color: "#F87171", data: scans.map(s => ({ id: s.id, value: s.injectionScore, date: s.createdAt })) },
+          ]}
+          onClickPoint={onViewDetail}
+        />
+      )}
 
       <div className="rounded-2xl bg-luxe-bg-elevated border border-luxe-border shadow-luxe overflow-hidden">
         <div className="px-6 py-4 border-b border-luxe-border bg-luxe-bg-muted/50">
