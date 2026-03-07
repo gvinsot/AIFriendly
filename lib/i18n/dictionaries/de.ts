@@ -1,0 +1,200 @@
+import type { Dictionary } from "../types";
+
+const de: Dictionary = {
+  common: {
+    aiReadabilityScore: "KI-Lesbarkeitsbewertung",
+    score: "Bewertung",
+    share: "Teilen",
+    copied: "Kopiert",
+    copy: "Kopieren",
+    back: "Zurück",
+    cancel: "Abbrechen",
+    save: "Speichern",
+    delete: "Löschen",
+    edit: "Bearbeiten",
+    add: "Hinzufügen",
+    loading: "Laden…",
+    connectionError: "Verbindungsfehler. Bitte versuchen Sie es erneut.",
+    error: "Fehler",
+    noData: "Keine Daten",
+    analyze: "Analysieren",
+    analyzing: "Analyse läuft…",
+    severity: { critical: "Kritisch", warning: "Warnung", info: "Info" },
+    frequency: {
+      "6h": "Alle 6 Std.",
+      daily: "Täglich",
+      weekly: "Wöchentlich",
+      monthly: "Monatlich",
+    },
+  },
+
+  meta: {
+    title: "AI Friendly — Prüfen Sie, ob Ihre Website KI-lesbar ist",
+    description:
+      "Analysieren Sie jede URL, um zu sehen, ob sie für KI-Suchmaschinen und Assistenten (ChatGPT, etc.) optimiert ist. Bewertung, Empfehlungen und KI-Vorschau.",
+    ogAlt: "AI Friendly - Analysieren Sie die KI-Lesbarkeit Ihrer Website",
+  },
+
+  home: {
+    subtitle: "Prüfen Sie, ob Ihre Website lesbar und für KI optimiert ist",
+    dashboardLink: "Mein Bereich",
+    articleTitle: "Analysieren Sie die KI-Lesbarkeit Ihrer Website",
+    articleP1:
+      "AI Friendly ist ein kostenloses Tool, das bewertet, ob Ihre Website für KI-Suchmaschinen und Assistenten wie ChatGPT, Claude, Gemini und andere LLMs optimiert ist. Geben Sie unten eine URL ein, um eine Lesbarkeitsbewertung von 10, personalisierte Empfehlungen und eine Vorschau dessen zu erhalten, was eine KI sieht.",
+    articleP2:
+      "Unsere Analyse überprüft Metadaten (Title, Description, Open Graph, Schema.org), Inhaltsstruktur (semantische Tags, Überschriftenhierarchie) und Bot-Zugänglichkeit (robots.txt, Sitemap, llms.txt).",
+    urlPlaceholder: "https://beispiel.de",
+    urlLabel: "Zu analysierende URL",
+    analyzeButton: "Analysieren",
+    analyzingButton: "Analyse läuft…",
+    emptyUrlError: "Bitte geben Sie eine URL ein.",
+    analyzeError: "Fehler bei der Analyse.",
+    resultsHeading: "Analyseergebnisse",
+    scoreTitle: "KI-Lesbarkeitsbewertung",
+    improvementsTitle: "Verbesserungsbedarf",
+    improvementsSubtitle:
+      "Diese Änderungen verbessern die KI-Lesbarkeit",
+    aiPreviewTitle: "KI-Vorschau",
+    aiPreviewSubtitle:
+      "Was ein Assistent wie ChatGPT sehen würde — strukturierte Darstellung",
+    footerTool: "Lesbarkeitsanalyse-Tool für künstliche Intelligenz",
+    footerSeo:
+      "Optimieren Sie Ihre Website für ChatGPT, Claude, Gemini und andere KI-Assistenten. Verbessern Sie Ihre Sichtbarkeit in LLM-generierten Antworten.",
+  },
+
+  auth: {
+    signInSubtitle: "Melden Sie sich an, um Ihre Websites zu verwalten",
+    oauthError:
+      "Ein Konto mit dieser E-Mail-Adresse existiert bereits. Melden Sie sich mit dem ursprünglichen Anbieter an.",
+    genericError: "Anmeldefehler. Bitte versuchen Sie es erneut.",
+    continueGoogle: "Weiter mit Google",
+    continueMicrosoft: "Weiter mit Microsoft",
+    backToHome: "Zurück zur Startseite",
+  },
+
+  shareSection: {
+    shareText: (score, url) =>
+      `Meine Website ${url} hat ${score}/10 bei AI Friendly erreicht — Prüfen Sie, ob Ihre Website KI-lesbar ist!`,
+    shareTitle: "AI Friendly — Analyseergebnis",
+    shareOnX: "Auf X (Twitter) teilen",
+    shareOnLinkedIn: "Auf LinkedIn teilen",
+    shareOnFacebook: "Auf Facebook teilen",
+    shareNative: "Teilen (natives Menü)",
+    copyLink: "Link kopieren",
+  },
+
+  dashboard: {
+    title: "Dashboard",
+    subtitle: "Übersicht Ihrer Analysen",
+    registeredSites: "Registrierte Websites",
+    averageScore: "Durchschnittliche Bewertung",
+    recentAnalyses: "Letzte Analysen",
+    viewAllSites: "Alle Websites anzeigen",
+    noAnalysesYet: "Noch keine Analysen vorhanden.",
+    addSite: "Website hinzufügen",
+    nav: {
+      dashboard: "Dashboard",
+      mySites: "Meine Websites",
+    },
+    signOut: "Abmelden",
+  },
+
+  sites: {
+    title: "Meine Websites",
+    subtitle: "Verwalten Sie Ihre Websites und geplante Analysen",
+    addSiteButton: "+ Website hinzufügen",
+    editSite: "Website bearbeiten",
+    addSiteForm: "Website hinzufügen",
+    siteName: "Website-Name",
+    siteNamePlaceholder: "Meine Website",
+    url: "URL",
+    urlPlaceholder: "https://beispiel.de",
+    analysisFrequency: "Analysehäufigkeit",
+    frequencyOptions: {
+      "6h": "Alle 6 Stunden",
+      daily: "Täglich",
+      weekly: "Wöchentlich",
+      monthly: "Monatlich",
+    },
+    savingButton: "Wird gespeichert…",
+    noSitesYet: "Sie haben noch keine Websites registriert.",
+    addFirstSite: "+ Erste Website hinzufügen",
+    inactive: "Inaktiv",
+    analysisCount: (n) => `${n} Analyse(n)`,
+    history: "Verlauf",
+    confirmDelete: "Diese Website und den gesamten Verlauf löschen?",
+    saveError: "Fehler beim Speichern.",
+  },
+
+  siteDetail: {
+    mySites: "Meine Websites",
+    analysisLabel: "Analyse",
+    siteNotFound: "Website nicht gefunden.",
+    tabs: {
+      ai: "KI-Zugänglichkeit",
+      availability: "Verfügbarkeit",
+      security: "Sicherheit",
+    },
+    ai: {
+      title: "KI-Zugänglichkeit",
+      analyzeButton: "Analysieren",
+      analyzingButton: "Analyse läuft…",
+      suggestedImprovements: "Vorgeschlagene Verbesserungen",
+      perfectScore: "Perfekte Bewertung!",
+      aiPreview: "KI-Vorschau",
+      scoreEvolution: "Bewertungsentwicklung",
+      analysisHistory: "Analyseverlauf",
+      analysisHistoryHint:
+        "Klicken für Details (60 Tage aufbewahrt)",
+      noAnalysis: "Keine Analyse.",
+    },
+    availability: {
+      title: "Verfügbarkeit",
+      checkButton: "Prüfen",
+      checkingButton: "Prüfung…",
+      currentScore: "Aktuelle Bewertung",
+      http: "HTTP",
+      ping: "Ping",
+      loadTime: "Ladezeit",
+      scoreTrend: "Trend der Verfügbarkeitsbewertung",
+      responseTime: "Antwortzeit",
+      checkHistory: "Prüfverlauf",
+      checkHistoryHint:
+        "Prüfung jede Minute — klicken für Details",
+      noCheck: "Keine Prüfungen.",
+      noCheckHint: 'Klicken Sie auf "Prüfen", um die erste zu starten.',
+      httpStatus: "HTTP-Status",
+      ttfb: "TTFB",
+      size: "Größe",
+      ssl: "SSL",
+      sslValid: "Gültig",
+      sslInvalid: "Ungültig",
+      checkDetails: "Prüfungsdetails",
+    },
+    security: {
+      title: "OWASP-Sicherheit",
+      scanButton: "Scannen",
+      scanningButton: "Scan läuft…",
+      global: "Gesamt",
+      headers: "Headers",
+      sslTls: "SSL/TLS",
+      cookies: "Cookies",
+      infoLeak: "Infoleaks",
+      injection: "Injection",
+      scoreTrend: "Trend der Sicherheitsbewertungen",
+      scanHistory: "Scanverlauf",
+      scanHistoryHint:
+        "Scan jede Stunde — klicken für Details",
+      noScan: "Keine Scans.",
+      noScanHint: 'Klicken Sie auf "Scannen", um den ersten zu starten.',
+      recommendations: "Empfehlungen",
+      catHeaders: "Sicherheitsheader",
+      catSsl: "SSL/TLS",
+      catCookies: "Cookies",
+      catInfoLeak: "Informationslecks",
+      catInjection: "Injection / XSS",
+    },
+  },
+};
+
+export default de;

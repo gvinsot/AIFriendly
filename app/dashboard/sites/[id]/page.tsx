@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import type { Improvement } from "@/lib/types";
+import { useI18n } from "@/lib/i18n/context";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -89,19 +90,6 @@ interface SecurityDetail {
 
 type TabId = "ai" | "availability" | "security";
 
-const FREQUENCY_LABELS: Record<string, string> = {
-  "6h": "Toutes les 6h",
-  daily: "Quotidienne",
-  weekly: "Hebdomadaire",
-  monthly: "Mensuelle",
-};
-
-const TABS: { id: TabId; label: string }[] = [
-  { id: "ai", label: "Accessibilité IA" },
-  { id: "availability", label: "Disponibilité" },
-  { id: "security", label: "Sécurité" },
-];
-
 // ─── Score Badge ────────────────────────────────────────────────────────────
 
 function ScoreBadge({ score, max = 10, size = "md" }: { score: number; max?: number; size?: "sm" | "md" | "lg" }) {
@@ -119,13 +107,16 @@ function ScoreBadge({ score, max = 10, size = "md" }: { score: number; max?: num
 
 // ─── Score Bar Chart ────────────────────────────────────────────────────────
 
-function ScoreChart({ entries, onClickEntry }: { entries: { id: string; score: number; createdAt: string }[]; onClickEntry?: (id: string) => void }) {
+function ScoreChart({ entries, onClickEntry, title }: { entries: { id: string; score: number; createdAt: string }[]; onClickEntry?: (id: string) => void; title: string }) {
+  const { locale } = useI18n();
+  const dateLocale = locale === "fr" ? "fr-FR" : locale === "es" ? "es-ES" : locale === "de" ? "de-DE" : "en-US";
+
   if (entries.length === 0) return null;
   const display = entries.slice().reverse().slice(-30);
   return (
     <div className="rounded-2xl bg-luxe-bg-elevated border border-luxe-border shadow-luxe overflow-hidden">
       <div className="px-6 py-4 border-b border-luxe-border bg-luxe-bg-muted/50">
-        <h2 className="font-display text-lg font-semibold text-luxe-fg">Évolution du score</h2>
+        <h2 className="font-display text-lg font-semibold text-luxe-fg">{title}</h2>
       </div>
       <div className="p-6">
         <div className="flex items-end gap-1 h-32">
@@ -137,7 +128,7 @@ function ScoreChart({ entries, onClickEntry }: { entries: { id: string; score: n
                 onClick={() => onClickEntry?.(a.id)}>
                 <div className={`${color} rounded-t opacity-70 group-hover:opacity-100 transition-opacity`} style={{ height: `${pct}%` }} />
                 <div className="absolute -top-8 left-1/2 -translate-x-1/2 hidden group-hover:block bg-luxe-bg-elevated border border-luxe-border rounded px-2 py-1 text-xs text-luxe-fg whitespace-nowrap shadow-luxe z-10">
-                  {a.score}/10 — {new Date(a.createdAt).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}
+                  {a.score}/10 — {new Date(a.createdAt).toLocaleDateString(dateLocale, { day: "numeric", month: "short" })}
                 </div>
               </div>
             );
@@ -165,6 +156,8 @@ function LineChart({
   formatY?: (v: number) => string;
   onClickPoint?: (id: string) => void;
 }) {
+  const { locale } = useI18n();
+  const dateLocale = locale === "fr" ? "fr-FR" : locale === "es" ? "es-ES" : locale === "de" ? "de-DE" : "en-US";
   const [hovered, setHovered] = useState<{ si: number; pi: number } | null>(null);
 
   const allValues = series.flatMap(s => s.data.map(d => d.value));
@@ -195,7 +188,6 @@ function LineChart({
       </div>
       <div className="p-4 sm:p-6">
         <svg viewBox={`0 0 ${w} ${h}`} className="w-full" preserveAspectRatio="xMidYMid meet">
-          {/* Grid lines + Y labels */}
           {Array.from({ length: ySteps + 1 }, (_, i) => {
             const val = (yMax / ySteps) * i;
             const y = pad.top + ch - (val / yMax) * ch;
@@ -210,7 +202,6 @@ function LineChart({
             );
           })}
 
-          {/* Data lines + dots */}
           {plotSeries.map((s, si) => {
             if (s.data.length === 0) return null;
             const pts = s.data.map((d, i) => ({
@@ -237,7 +228,7 @@ function LineChart({
                         <rect x={p.x - 55} y={p.y - 30} width="110" height="20" rx="4"
                           fill="#1F2937" stroke="#374151" strokeWidth="0.5" />
                         <text x={p.x} y={p.y - 16} textAnchor="middle" fontSize="9" fill={s.color} fontWeight="600">
-                          {formatY(p.value)} — {new Date(p.date).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}
+                          {formatY(p.value)} — {new Date(p.date).toLocaleDateString(dateLocale, { day: "numeric", month: "short" })}
                         </text>
                       </g>
                     )}
@@ -247,7 +238,6 @@ function LineChart({
             );
           })}
 
-          {/* X-axis date labels */}
           {plotSeries[0]?.data.length > 0 && (() => {
             const d = plotSeries[0].data;
             const idxs = d.length <= 5 ? d.map((_, i) => i) :
@@ -257,7 +247,7 @@ function LineChart({
               const x = pad.left + (d.length === 1 ? cw / 2 : (i / (d.length - 1)) * cw);
               return (
                 <text key={i} x={x} y={h - 5} textAnchor="middle" fontSize="8" fill="#9CA3AF">
-                  {new Date(d[i].date).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}
+                  {new Date(d[i].date).toLocaleDateString(dateLocale, { day: "numeric", month: "short" })}
                 </text>
               );
             });
@@ -273,6 +263,9 @@ function LineChart({
 export default function SiteDetailPage() {
   const params = useParams();
   const siteId = params.id as string;
+  const { t, locale } = useI18n();
+
+  const dateLocale = locale === "fr" ? "fr-FR" : locale === "es" ? "es-ES" : locale === "de" ? "de-DE" : "en-US";
 
   const [site, setSite] = useState<SiteInfo | null>(null);
   const [activeTab, setActiveTab] = useState<TabId>("ai");
@@ -295,6 +288,12 @@ export default function SiteDetailPage() {
 
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const TABS: { id: TabId; label: string }[] = [
+    { id: "ai", label: t.siteDetail.tabs.ai },
+    { id: "availability", label: t.siteDetail.tabs.availability },
+    { id: "security", label: t.siteDetail.tabs.security },
+  ];
 
   const fetchData = useCallback(async () => {
     try {
@@ -321,27 +320,27 @@ export default function SiteDetailPage() {
     setAnalyzing(true); setError(null);
     try {
       const res = await fetch(`/api/sites/${siteId}/analyze`, { method: "POST" });
-      if (!res.ok) { const d = await res.json(); setError(d.error || "Erreur."); return; }
+      if (!res.ok) { const d = await res.json(); setError(d.error || t.common.error); return; }
       fetchData();
-    } catch { setError("Erreur de connexion."); } finally { setAnalyzing(false); }
+    } catch { setError(t.common.connectionError); } finally { setAnalyzing(false); }
   }
 
   async function handleCheckNow() {
     setChecking(true); setError(null);
     try {
       const res = await fetch(`/api/sites/${siteId}/availability/check`, { method: "POST" });
-      if (!res.ok) { const d = await res.json(); setError(d.error || "Erreur."); return; }
+      if (!res.ok) { const d = await res.json(); setError(d.error || t.common.error); return; }
       fetchData();
-    } catch { setError("Erreur de connexion."); } finally { setChecking(false); }
+    } catch { setError(t.common.connectionError); } finally { setChecking(false); }
   }
 
   async function handleScanNow() {
     setScanning(true); setError(null);
     try {
       const res = await fetch(`/api/sites/${siteId}/security/scan`, { method: "POST" });
-      if (!res.ok) { const d = await res.json(); setError(d.error || "Erreur."); return; }
+      if (!res.ok) { const d = await res.json(); setError(d.error || t.common.error); return; }
       fetchData();
-    } catch { setError("Erreur de connexion."); } finally { setScanning(false); }
+    } catch { setError(t.common.connectionError); } finally { setScanning(false); }
   }
 
   // ─── Detail loaders ─────────────────────────────────────────────────────
@@ -386,8 +385,8 @@ export default function SiteDetailPage() {
   if (!site) {
     return (
       <div className="text-center py-20">
-        <p className="text-luxe-fg-muted">Site introuvable.</p>
-        <Link href="/dashboard/sites" className="text-sm text-luxe-gold hover:underline mt-2 inline-block">&larr; Retour</Link>
+        <p className="text-luxe-fg-muted">{t.siteDetail.siteNotFound}</p>
+        <Link href="/dashboard/sites" className="text-sm text-luxe-gold hover:underline mt-2 inline-block">&larr; {t.common.back}</Link>
       </div>
     );
   }
@@ -397,10 +396,10 @@ export default function SiteDetailPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <Link href="/dashboard/sites" className="text-xs text-luxe-fg-muted hover:text-luxe-gold transition-colors">&larr; Mes sites</Link>
+          <Link href="/dashboard/sites" className="text-xs text-luxe-fg-muted hover:text-luxe-gold transition-colors">&larr; {t.siteDetail.mySites}</Link>
           <h1 className="font-display text-2xl font-semibold text-luxe-fg mt-1">{site.name}</h1>
           <p className="text-sm text-luxe-fg-muted mt-0.5">{site.url}</p>
-          <p className="text-xs text-luxe-fg-muted mt-1">Analyse {FREQUENCY_LABELS[site.frequency]?.toLowerCase() || site.frequency}</p>
+          <p className="text-xs text-luxe-fg-muted mt-1">{t.siteDetail.analysisLabel} {t.common.frequency[site.frequency as keyof typeof t.common.frequency]?.toLowerCase() || site.frequency}</p>
         </div>
       </div>
 
@@ -426,6 +425,7 @@ export default function SiteDetailPage() {
           analyses={analyses} selectedAnalysis={selectedAnalysis}
           analyzing={analyzing} loadingDetail={loadingDetail}
           onAnalyze={handleAnalyzeNow} onViewDetail={viewAnalysisDetail}
+          dateLocale={dateLocale}
         />
       )}
       {activeTab === "availability" && (
@@ -433,6 +433,7 @@ export default function SiteDetailPage() {
           checks={availChecks} selectedCheck={selectedCheck}
           checking={checking} loadingDetail={loadingDetail}
           onCheck={handleCheckNow} onViewDetail={viewCheckDetail}
+          dateLocale={dateLocale}
         />
       )}
       {activeTab === "security" && (
@@ -440,6 +441,7 @@ export default function SiteDetailPage() {
           scans={securityScans} selectedScan={selectedScan}
           scanning={scanning} loadingDetail={loadingDetail}
           onScan={handleScanNow} onViewDetail={viewScanDetail}
+          dateLocale={dateLocale}
         />
       )}
     </div>
@@ -450,31 +452,37 @@ export default function SiteDetailPage() {
 // TAB: AI Analysis
 // ═══════════════════════════════════════════════════════════════════════════
 
-function AITab({ analyses, selectedAnalysis, analyzing, loadingDetail, onAnalyze, onViewDetail }: {
+function AITab({ analyses, selectedAnalysis, analyzing, loadingDetail, onAnalyze, onViewDetail, dateLocale }: {
   analyses: AnalysisEntry[]; selectedAnalysis: AnalysisDetail | null;
   analyzing: boolean; loadingDetail: boolean;
   onAnalyze: () => void; onViewDetail: (id: string) => void;
+  dateLocale: string;
 }) {
+  const { t } = useI18n();
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="font-display text-lg font-semibold text-luxe-fg">Accessibilité IA</h2>
-        <ActionButton loading={analyzing} onClick={onAnalyze} label="Analyser" loadingLabel="Analyse…" />
+        <h2 className="font-display text-lg font-semibold text-luxe-fg">{t.siteDetail.ai.title}</h2>
+        <ActionButton loading={analyzing} onClick={onAnalyze} label={t.siteDetail.ai.analyzeButton} loadingLabel={t.siteDetail.ai.analyzingButton} />
       </div>
 
-      <ScoreChart entries={analyses} onClickEntry={onViewDetail} />
+      <ScoreChart entries={analyses} onClickEntry={onViewDetail} title={t.siteDetail.ai.scoreEvolution} />
 
       <HistoryList
         items={analyses}
         selectedId={selectedAnalysis?.id || null}
         onViewDetail={onViewDetail}
+        title={t.siteDetail.ai.analysisHistory}
+        hint={t.siteDetail.ai.analysisHistoryHint}
+        emptyText={t.siteDetail.ai.noAnalysis}
+        dateLocale={dateLocale}
         renderDetail={() => selectedAnalysis && (
           <div className="border-t border-luxe-border bg-luxe-bg-muted/20 px-6 py-5 space-y-4">
             {loadingDetail ? <Spinner /> : (
               <>
                 {selectedAnalysis.details.improvements?.length > 0 ? (
                   <div>
-                    <h4 className="text-sm font-medium text-luxe-fg mb-3">Améliorations suggérées</h4>
+                    <h4 className="text-sm font-medium text-luxe-fg mb-3">{t.siteDetail.ai.suggestedImprovements}</h4>
                     <ul className="space-y-2">
                       {selectedAnalysis.details.improvements.map((imp: Improvement, i: number) => (
                         <li key={i} className="flex items-start gap-2 text-sm">
@@ -488,11 +496,11 @@ function AITab({ analyses, selectedAnalysis, analyzing, loadingDetail, onAnalyze
                     </ul>
                   </div>
                 ) : (
-                  <p className="text-sm text-luxe-score-high">Score parfait !</p>
+                  <p className="text-sm text-luxe-score-high">{t.siteDetail.ai.perfectScore}</p>
                 )}
                 {selectedAnalysis.details.aiPreviewYaml && (
                   <div>
-                    <h4 className="text-sm font-medium text-luxe-fg mb-2">Aperçu IA</h4>
+                    <h4 className="text-sm font-medium text-luxe-fg mb-2">{t.siteDetail.ai.aiPreview}</h4>
                     <pre className="text-xs font-mono text-luxe-fg-muted bg-luxe-bg rounded-lg border border-luxe-border p-4 overflow-auto max-h-60 preview-scroll">
                       {selectedAnalysis.details.aiPreviewYaml}
                     </pre>
@@ -511,48 +519,48 @@ function AITab({ analyses, selectedAnalysis, analyzing, loadingDetail, onAnalyze
 // TAB: Availability
 // ═══════════════════════════════════════════════════════════════════════════
 
-function AvailabilityTab({ checks, selectedCheck, checking, loadingDetail, onCheck, onViewDetail }: {
+function AvailabilityTab({ checks, selectedCheck, checking, loadingDetail, onCheck, onViewDetail, dateLocale }: {
   checks: AvailabilityEntry[]; selectedCheck: AvailabilityDetail | null;
   checking: boolean; loadingDetail: boolean;
   onCheck: () => void; onViewDetail: (id: string) => void;
+  dateLocale: string;
 }) {
+  const { t } = useI18n();
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="font-display text-lg font-semibold text-luxe-fg">Disponibilité</h2>
-        <ActionButton loading={checking} onClick={onCheck} label="Checker" loadingLabel="Check…" />
+        <h2 className="font-display text-lg font-semibold text-luxe-fg">{t.siteDetail.availability.title}</h2>
+        <ActionButton loading={checking} onClick={onCheck} label={t.siteDetail.availability.checkButton} loadingLabel={t.siteDetail.availability.checkingButton} />
       </div>
 
       {/* Quick stats */}
       {checks.length > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <MiniStat label="Score actuel" value={<ScoreBadge score={checks[0].score} size="sm" />} />
-          <MiniStat label="HTTP" value={checks[0].httpStatus ? `${checks[0].httpStatus}` : "—"} />
-          <MiniStat label="Ping" value={checks[0].pingMs !== null ? `${checks[0].pingMs}ms` : "—"} />
-          <MiniStat label="Chargement" value={checks[0].loadTimeMs !== null ? `${(checks[0].loadTimeMs / 1000).toFixed(1)}s` : "—"} />
+          <MiniStat label={t.siteDetail.availability.currentScore} value={<ScoreBadge score={checks[0].score} size="sm" />} />
+          <MiniStat label={t.siteDetail.availability.http} value={checks[0].httpStatus ? `${checks[0].httpStatus}` : "—"} />
+          <MiniStat label={t.siteDetail.availability.ping} value={checks[0].pingMs !== null ? `${checks[0].pingMs}ms` : "—"} />
+          <MiniStat label={t.siteDetail.availability.loadTime} value={checks[0].loadTimeMs !== null ? `${(checks[0].loadTimeMs / 1000).toFixed(1)}s` : "—"} />
         </div>
       )}
 
-      <ScoreChart entries={checks.map(c => ({ id: c.id, score: c.score, createdAt: c.createdAt }))} onClickEntry={onViewDetail} />
+      <ScoreChart entries={checks.map(c => ({ id: c.id, score: c.score, createdAt: c.createdAt }))} onClickEntry={onViewDetail} title={t.siteDetail.availability.scoreTrend} />
 
-      {/* Tendance du score de disponibilité (line chart) */}
       <LineChart
-        title="Tendance du score de disponibilité"
+        title={t.siteDetail.availability.scoreTrend}
         yMax={10}
         series={[
-          { label: "Score", color: "#22C55E", data: checks.map(c => ({ id: c.id, value: c.score, date: c.createdAt })) },
+          { label: t.common.score, color: "#22C55E", data: checks.map(c => ({ id: c.id, value: c.score, date: c.createdAt })) },
         ]}
         onClickPoint={onViewDetail}
       />
 
-      {/* Tendance des temps de réponse */}
       {checks.some(c => c.pingMs !== null || c.loadTimeMs !== null) && (
         <LineChart
-          title="Temps de réponse"
+          title={t.siteDetail.availability.responseTime}
           formatY={(v) => `${Math.round(v)}ms`}
           series={[
-            { label: "Ping", color: "#60A5FA", data: checks.filter(c => c.pingMs !== null).map(c => ({ id: c.id, value: c.pingMs!, date: c.createdAt })) },
-            { label: "Chargement", color: "#F59E0B", data: checks.filter(c => c.loadTimeMs !== null).map(c => ({ id: c.id, value: c.loadTimeMs!, date: c.createdAt })) },
+            { label: t.siteDetail.availability.ping, color: "#60A5FA", data: checks.filter(c => c.pingMs !== null).map(c => ({ id: c.id, value: c.pingMs!, date: c.createdAt })) },
+            { label: t.siteDetail.availability.loadTime, color: "#F59E0B", data: checks.filter(c => c.loadTimeMs !== null).map(c => ({ id: c.id, value: c.loadTimeMs!, date: c.createdAt })) },
           ]}
           onClickPoint={onViewDetail}
         />
@@ -560,12 +568,12 @@ function AvailabilityTab({ checks, selectedCheck, checking, loadingDetail, onChe
 
       <div className="rounded-2xl bg-luxe-bg-elevated border border-luxe-border shadow-luxe overflow-hidden">
         <div className="px-6 py-4 border-b border-luxe-border bg-luxe-bg-muted/50">
-          <h3 className="font-display text-lg font-semibold text-luxe-fg">Historique des checks</h3>
-          <p className="text-xs text-luxe-fg-muted mt-0.5">Check toutes les minutes — cliquez pour les détails</p>
+          <h3 className="font-display text-lg font-semibold text-luxe-fg">{t.siteDetail.availability.checkHistory}</h3>
+          <p className="text-xs text-luxe-fg-muted mt-0.5">{t.siteDetail.availability.checkHistoryHint}</p>
         </div>
 
         {checks.length === 0 ? (
-          <div className="px-6 py-12 text-center text-luxe-fg-muted">Aucun check. Cliquez sur &quot;Checker&quot; pour lancer le premier.</div>
+          <div className="px-6 py-12 text-center text-luxe-fg-muted">{t.siteDetail.availability.noCheck} {t.siteDetail.availability.noCheckHint}</div>
         ) : (
           <ul className="divide-y divide-luxe-border">
             {checks.slice(0, 50).map((c) => (
@@ -576,8 +584,8 @@ function AvailabilityTab({ checks, selectedCheck, checking, loadingDetail, onChe
                     <ScoreBadge score={c.score} size="sm" />
                     <div>
                       <p className="text-sm text-luxe-fg">
-                        {new Date(c.createdAt).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}{" "}
-                        {new Date(c.createdAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                        {new Date(c.createdAt).toLocaleDateString(dateLocale, { day: "numeric", month: "short" })}{" "}
+                        {new Date(c.createdAt).toLocaleTimeString(dateLocale, { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
                       </p>
                       <p className="text-xs text-luxe-fg-muted">
                         HTTP {c.httpStatus || "?"} — Ping {c.pingMs !== null ? `${c.pingMs}ms` : "?"} — Load {c.loadTimeMs !== null ? `${(c.loadTimeMs / 1000).toFixed(1)}s` : "?"}
@@ -591,16 +599,16 @@ function AvailabilityTab({ checks, selectedCheck, checking, loadingDetail, onChe
                     {loadingDetail ? <Spinner /> : (
                       <>
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                          <DetailCard label="Statut HTTP" value={selectedCheck.httpStatus ? `${selectedCheck.httpStatus}` : "—"} />
-                          <DetailCard label="Ping" value={selectedCheck.pingMs !== null ? `${selectedCheck.pingMs}ms` : "—"} />
-                          <DetailCard label="TTFB" value={selectedCheck.ttfbMs !== null ? `${selectedCheck.ttfbMs}ms` : "—"} />
-                          <DetailCard label="Chargement" value={selectedCheck.loadTimeMs !== null ? `${(selectedCheck.loadTimeMs / 1000).toFixed(2)}s` : "—"} />
-                          <DetailCard label="Taille" value={selectedCheck.responseSize !== null ? `${(selectedCheck.responseSize / 1024).toFixed(1)} Ko` : "—"} />
-                          <DetailCard label="SSL" value={selectedCheck.sslValid === true ? "Valide" : selectedCheck.sslValid === false ? "Invalide" : "—"} />
+                          <DetailCard label={t.siteDetail.availability.httpStatus} value={selectedCheck.httpStatus ? `${selectedCheck.httpStatus}` : "—"} />
+                          <DetailCard label={t.siteDetail.availability.ping} value={selectedCheck.pingMs !== null ? `${selectedCheck.pingMs}ms` : "—"} />
+                          <DetailCard label={t.siteDetail.availability.ttfb} value={selectedCheck.ttfbMs !== null ? `${selectedCheck.ttfbMs}ms` : "—"} />
+                          <DetailCard label={t.siteDetail.availability.loadTime} value={selectedCheck.loadTimeMs !== null ? `${(selectedCheck.loadTimeMs / 1000).toFixed(2)}s` : "—"} />
+                          <DetailCard label={t.siteDetail.availability.size} value={selectedCheck.responseSize !== null ? `${(selectedCheck.responseSize / 1024).toFixed(1)} Ko` : "—"} />
+                          <DetailCard label={t.siteDetail.availability.ssl} value={selectedCheck.sslValid === true ? t.siteDetail.availability.sslValid : selectedCheck.sslValid === false ? t.siteDetail.availability.sslInvalid : "—"} />
                         </div>
                         {selectedCheck.details.checks.length > 0 && (
                           <div>
-                            <h4 className="text-sm font-medium text-luxe-fg mb-3">Détails du check</h4>
+                            <h4 className="text-sm font-medium text-luxe-fg mb-3">{t.siteDetail.availability.checkDetails}</h4>
                             <ul className="space-y-1.5">
                               {selectedCheck.details.checks.map((ck, i) => (
                                 <li key={i} className="flex items-center gap-2 text-sm">
@@ -630,44 +638,54 @@ function AvailabilityTab({ checks, selectedCheck, checking, loadingDetail, onChe
 // TAB: Security
 // ═══════════════════════════════════════════════════════════════════════════
 
-function SecurityTab({ scans, selectedScan, scanning, loadingDetail, onScan, onViewDetail }: {
+function SecurityTab({ scans, selectedScan, scanning, loadingDetail, onScan, onViewDetail, dateLocale }: {
   scans: SecurityEntry[]; selectedScan: SecurityDetail | null;
   scanning: boolean; loadingDetail: boolean;
   onScan: () => void; onViewDetail: (id: string) => void;
+  dateLocale: string;
 }) {
+  const { t } = useI18n();
+
+  const catLabel: Record<string, string> = {
+    headers: t.siteDetail.security.catHeaders,
+    ssl: t.siteDetail.security.catSsl,
+    cookies: t.siteDetail.security.catCookies,
+    info_leak: t.siteDetail.security.catInfoLeak,
+    injection: t.siteDetail.security.catInjection,
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="font-display text-lg font-semibold text-luxe-fg">Sécurité OWASP</h2>
-        <ActionButton loading={scanning} onClick={onScan} label="Scanner" loadingLabel="Scan…" />
+        <h2 className="font-display text-lg font-semibold text-luxe-fg">{t.siteDetail.security.title}</h2>
+        <ActionButton loading={scanning} onClick={onScan} label={t.siteDetail.security.scanButton} loadingLabel={t.siteDetail.security.scanningButton} />
       </div>
 
       {/* Sub-scores */}
       {scans.length > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-6 gap-3">
-          <MiniStat label="Global" value={<ScoreBadge score={scans[0].score} size="sm" />} />
-          <MiniStat label="Headers" value={<ScoreBadge score={scans[0].headersScore} size="sm" />} />
-          <MiniStat label="SSL/TLS" value={<ScoreBadge score={scans[0].sslScore} size="sm" />} />
-          <MiniStat label="Cookies" value={<ScoreBadge score={scans[0].cookiesScore} size="sm" />} />
-          <MiniStat label="Fuites info" value={<ScoreBadge score={scans[0].infoLeakScore} size="sm" />} />
-          <MiniStat label="Injection" value={<ScoreBadge score={scans[0].injectionScore} size="sm" />} />
+          <MiniStat label={t.siteDetail.security.global} value={<ScoreBadge score={scans[0].score} size="sm" />} />
+          <MiniStat label={t.siteDetail.security.headers} value={<ScoreBadge score={scans[0].headersScore} size="sm" />} />
+          <MiniStat label={t.siteDetail.security.sslTls} value={<ScoreBadge score={scans[0].sslScore} size="sm" />} />
+          <MiniStat label={t.siteDetail.security.cookies} value={<ScoreBadge score={scans[0].cookiesScore} size="sm" />} />
+          <MiniStat label={t.siteDetail.security.infoLeak} value={<ScoreBadge score={scans[0].infoLeakScore} size="sm" />} />
+          <MiniStat label={t.siteDetail.security.injection} value={<ScoreBadge score={scans[0].injectionScore} size="sm" />} />
         </div>
       )}
 
-      <ScoreChart entries={scans.map(s => ({ id: s.id, score: s.score, createdAt: s.createdAt }))} onClickEntry={onViewDetail} />
+      <ScoreChart entries={scans.map(s => ({ id: s.id, score: s.score, createdAt: s.createdAt }))} onClickEntry={onViewDetail} title={t.siteDetail.security.scoreTrend} />
 
-      {/* Tendance des scores de sécurité (multi-line chart) */}
       {scans.length > 0 && (
         <LineChart
-          title="Tendance des scores de sécurité"
+          title={t.siteDetail.security.scoreTrend}
           yMax={10}
           series={[
-            { label: "Global", color: "#F59E0B", data: scans.map(s => ({ id: s.id, value: s.score, date: s.createdAt })) },
-            { label: "Headers", color: "#60A5FA", data: scans.map(s => ({ id: s.id, value: s.headersScore, date: s.createdAt })) },
+            { label: t.siteDetail.security.global, color: "#F59E0B", data: scans.map(s => ({ id: s.id, value: s.score, date: s.createdAt })) },
+            { label: t.siteDetail.security.headers, color: "#60A5FA", data: scans.map(s => ({ id: s.id, value: s.headersScore, date: s.createdAt })) },
             { label: "SSL", color: "#34D399", data: scans.map(s => ({ id: s.id, value: s.sslScore, date: s.createdAt })) },
-            { label: "Cookies", color: "#A78BFA", data: scans.map(s => ({ id: s.id, value: s.cookiesScore, date: s.createdAt })) },
-            { label: "Fuites", color: "#FB923C", data: scans.map(s => ({ id: s.id, value: s.infoLeakScore, date: s.createdAt })) },
-            { label: "Injection", color: "#F87171", data: scans.map(s => ({ id: s.id, value: s.injectionScore, date: s.createdAt })) },
+            { label: t.siteDetail.security.cookies, color: "#A78BFA", data: scans.map(s => ({ id: s.id, value: s.cookiesScore, date: s.createdAt })) },
+            { label: t.siteDetail.security.infoLeak, color: "#FB923C", data: scans.map(s => ({ id: s.id, value: s.infoLeakScore, date: s.createdAt })) },
+            { label: t.siteDetail.security.injection, color: "#F87171", data: scans.map(s => ({ id: s.id, value: s.injectionScore, date: s.createdAt })) },
           ]}
           onClickPoint={onViewDetail}
         />
@@ -675,12 +693,12 @@ function SecurityTab({ scans, selectedScan, scanning, loadingDetail, onScan, onV
 
       <div className="rounded-2xl bg-luxe-bg-elevated border border-luxe-border shadow-luxe overflow-hidden">
         <div className="px-6 py-4 border-b border-luxe-border bg-luxe-bg-muted/50">
-          <h3 className="font-display text-lg font-semibold text-luxe-fg">Historique des scans</h3>
-          <p className="text-xs text-luxe-fg-muted mt-0.5">Scan toutes les heures — cliquez pour les détails</p>
+          <h3 className="font-display text-lg font-semibold text-luxe-fg">{t.siteDetail.security.scanHistory}</h3>
+          <p className="text-xs text-luxe-fg-muted mt-0.5">{t.siteDetail.security.scanHistoryHint}</p>
         </div>
 
         {scans.length === 0 ? (
-          <div className="px-6 py-12 text-center text-luxe-fg-muted">Aucun scan. Cliquez sur &quot;Scanner&quot; pour lancer le premier.</div>
+          <div className="px-6 py-12 text-center text-luxe-fg-muted">{t.siteDetail.security.noScan} {t.siteDetail.security.noScanHint}</div>
         ) : (
           <ul className="divide-y divide-luxe-border">
             {scans.map((s) => (
@@ -691,11 +709,11 @@ function SecurityTab({ scans, selectedScan, scanning, loadingDetail, onScan, onV
                     <ScoreBadge score={s.score} size="sm" />
                     <div>
                       <p className="text-sm text-luxe-fg">
-                        {new Date(s.createdAt).toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" })}{" "}
-                        {new Date(s.createdAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+                        {new Date(s.createdAt).toLocaleDateString(dateLocale, { weekday: "short", day: "numeric", month: "short" })}{" "}
+                        {new Date(s.createdAt).toLocaleTimeString(dateLocale, { hour: "2-digit", minute: "2-digit" })}
                       </p>
                       <p className="text-xs text-luxe-fg-muted">
-                        Headers {s.headersScore}/10 — SSL {s.sslScore}/10 — Cookies {s.cookiesScore}/10
+                        {t.siteDetail.security.headers} {s.headersScore}/10 — SSL {s.sslScore}/10 — {t.siteDetail.security.cookies} {s.cookiesScore}/10
                       </p>
                     </div>
                   </div>
@@ -705,32 +723,29 @@ function SecurityTab({ scans, selectedScan, scanning, loadingDetail, onScan, onV
                   <div className="border-t border-luxe-border bg-luxe-bg-muted/20 px-6 py-5 space-y-4">
                     {loadingDetail ? <Spinner /> : (
                       <>
-                        {/* Sub-scores breakdown */}
                         <div className="grid grid-cols-5 gap-2">
-                          <SubScoreBar label="Headers" score={selectedScan.headersScore} />
+                          <SubScoreBar label={t.siteDetail.security.headers} score={selectedScan.headersScore} />
                           <SubScoreBar label="SSL" score={selectedScan.sslScore} />
-                          <SubScoreBar label="Cookies" score={selectedScan.cookiesScore} />
-                          <SubScoreBar label="Fuites" score={selectedScan.infoLeakScore} />
-                          <SubScoreBar label="Injection" score={selectedScan.injectionScore} />
+                          <SubScoreBar label={t.siteDetail.security.cookies} score={selectedScan.cookiesScore} />
+                          <SubScoreBar label={t.siteDetail.security.infoLeak} score={selectedScan.infoLeakScore} />
+                          <SubScoreBar label={t.siteDetail.security.injection} score={selectedScan.injectionScore} />
                         </div>
 
-                        {/* Tests by category */}
                         {(["headers", "ssl", "cookies", "info_leak", "injection"] as const).map((cat) => {
-                          const catTests = selectedScan.details.tests.filter(t => t.category === cat);
+                          const catTests = selectedScan.details.tests.filter(ct => ct.category === cat);
                           if (catTests.length === 0) return null;
-                          const catLabel: Record<string, string> = { headers: "Headers de sécurité", ssl: "SSL/TLS", cookies: "Cookies", info_leak: "Fuites d'information", injection: "Injection / XSS" };
                           return (
                             <div key={cat}>
                               <h4 className="text-sm font-medium text-luxe-fg mb-2">{catLabel[cat] || cat}</h4>
                               <ul className="space-y-1.5">
-                                {catTests.map((t, i) => (
+                                {catTests.map((ct, i) => (
                                   <li key={i} className="flex items-start gap-2 text-sm">
-                                    <StatusDot status={t.status} />
+                                    <StatusDot status={ct.status} />
                                     <div className="flex-1">
-                                      <span className="text-luxe-fg">{t.name}</span>
-                                      <span className="text-luxe-fg-muted ml-2">— {t.value}</span>
-                                      {t.deduction > 0 && <span className="text-xs text-luxe-score-low ml-1">(-{t.deduction})</span>}
-                                      {t.recommendation && <p className="text-xs text-luxe-gold mt-0.5">{t.recommendation}</p>}
+                                      <span className="text-luxe-fg">{ct.name}</span>
+                                      <span className="text-luxe-fg-muted ml-2">— {ct.value}</span>
+                                      {ct.deduction > 0 && <span className="text-xs text-luxe-score-low ml-1">(-{ct.deduction})</span>}
+                                      {ct.recommendation && <p className="text-xs text-luxe-gold mt-0.5">{ct.recommendation}</p>}
                                     </div>
                                   </li>
                                 ))}
@@ -739,10 +754,9 @@ function SecurityTab({ scans, selectedScan, scanning, loadingDetail, onScan, onV
                           );
                         })}
 
-                        {/* Recommendations */}
                         {selectedScan.details.recommendations.length > 0 && (
                           <div>
-                            <h4 className="text-sm font-medium text-luxe-fg mb-2">Recommandations</h4>
+                            <h4 className="text-sm font-medium text-luxe-fg mb-2">{t.siteDetail.security.recommendations}</h4>
                             <ul className="space-y-1">
                               {selectedScan.details.recommendations.map((r, i) => (
                                 <li key={i} className="flex items-start gap-2 text-sm">
@@ -792,19 +806,20 @@ function Spinner() {
   );
 }
 
-function HistoryList({ items, selectedId, onViewDetail, renderDetail }: {
+function HistoryList({ items, selectedId, onViewDetail, renderDetail, title, hint, emptyText, dateLocale }: {
   items: { id: string; score: number; maxScore?: number; createdAt: string }[];
   selectedId: string | null; onViewDetail: (id: string) => void;
   renderDetail: () => React.ReactNode;
+  title: string; hint: string; emptyText: string; dateLocale: string;
 }) {
   return (
     <div className="rounded-2xl bg-luxe-bg-elevated border border-luxe-border shadow-luxe overflow-hidden">
       <div className="px-6 py-4 border-b border-luxe-border bg-luxe-bg-muted/50">
-        <h3 className="font-display text-lg font-semibold text-luxe-fg">Historique des analyses</h3>
-        <p className="text-xs text-luxe-fg-muted mt-0.5">Cliquez pour voir les détails (conservé 60 jours)</p>
+        <h3 className="font-display text-lg font-semibold text-luxe-fg">{title}</h3>
+        <p className="text-xs text-luxe-fg-muted mt-0.5">{hint}</p>
       </div>
       {items.length === 0 ? (
-        <div className="px-6 py-12 text-center text-luxe-fg-muted">Aucune analyse.</div>
+        <div className="px-6 py-12 text-center text-luxe-fg-muted">{emptyText}</div>
       ) : (
         <ul className="divide-y divide-luxe-border">
           {items.map((a) => (
@@ -813,10 +828,10 @@ function HistoryList({ items, selectedId, onViewDetail, renderDetail }: {
                 className={`w-full text-left px-6 py-4 flex items-center justify-between hover:bg-luxe-bg-muted/30 transition-colors ${selectedId === a.id ? "bg-luxe-bg-muted/40" : ""}`}>
                 <div>
                   <p className="text-sm font-medium text-luxe-fg">
-                    {new Date(a.createdAt).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+                    {new Date(a.createdAt).toLocaleDateString(dateLocale, { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
                   </p>
                   <p className="text-xs text-luxe-fg-muted mt-0.5">
-                    {new Date(a.createdAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+                    {new Date(a.createdAt).toLocaleTimeString(dateLocale, { hour: "2-digit", minute: "2-digit" })}
                   </p>
                 </div>
                 <ScoreBadge score={a.score} max={a.maxScore || 10} />
@@ -831,11 +846,12 @@ function HistoryList({ items, selectedId, onViewDetail, renderDetail }: {
 }
 
 function SeverityBadge({ severity }: { severity: "critical" | "warning" | "info" | string }) {
+  const { t } = useI18n();
   const color =
     severity === "critical" ? "bg-luxe-score-low/15 text-luxe-score-low border-luxe-score-low/20"
     : severity === "warning" ? "bg-luxe-score-mid/15 text-luxe-score-mid border-luxe-score-mid/20"
     : "bg-luxe-gold/10 text-luxe-gold-muted border-luxe-border";
-  const label = severity === "critical" ? "Critique" : severity === "warning" ? "Attention" : "Info";
+  const label = t.common.severity[severity as keyof typeof t.common.severity] || severity;
   return (
     <span className={`mt-0.5 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium border ${color}`}>
       {label}

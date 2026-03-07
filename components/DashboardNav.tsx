@@ -3,6 +3,8 @@
 import { signOut } from "next-auth/react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useI18n } from "@/lib/i18n/context";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 
 interface DashboardNavProps {
   user: {
@@ -14,6 +16,7 @@ interface DashboardNavProps {
 
 export function DashboardNav({ user }: DashboardNavProps) {
   const pathname = usePathname();
+  const { t } = useI18n();
 
   return (
     <header className="border-b border-luxe-border bg-luxe-bg-elevated/80 backdrop-blur-sm sticky top-0 z-50">
@@ -25,13 +28,13 @@ export function DashboardNav({ user }: DashboardNavProps) {
           </Link>
           <nav className="flex items-center gap-1">
             <NavLink href="/dashboard" active={pathname === "/dashboard"}>
-              Tableau de bord
+              {t.dashboard.nav.dashboard}
             </NavLink>
             <NavLink
               href="/dashboard/sites"
               active={pathname.startsWith("/dashboard/sites")}
             >
-              Mes sites
+              {t.dashboard.nav.mySites}
             </NavLink>
           </nav>
         </div>
@@ -49,11 +52,12 @@ export function DashboardNav({ user }: DashboardNavProps) {
               className="size-8 rounded-full border border-luxe-border"
             />
           )}
+          <LanguageSwitcher />
           <button
             onClick={() => signOut({ callbackUrl: "/" })}
             className="text-xs text-luxe-fg-muted hover:text-luxe-fg transition-colors border border-luxe-border rounded-lg px-3 py-1.5"
           >
-            Déconnexion
+            {t.dashboard.signOut}
           </button>
         </div>
       </div>

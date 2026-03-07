@@ -4,8 +4,11 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import type { AnalysisResult, Improvement } from "@/lib/types";
 import { ShareSection } from "@/components/ShareSection";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import { useI18n } from "@/lib/i18n/context";
 
 export default function Home() {
+  const { t } = useI18n();
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -24,7 +27,7 @@ export default function Home() {
     setResult(null);
     const trimmed = url.trim();
     if (!trimmed) {
-      setError("Veuillez saisir une URL.");
+      setError(t.home.emptyUrlError);
       return;
     }
     let toFetch = trimmed;
@@ -39,12 +42,12 @@ export default function Home() {
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error || "Erreur lors de l'analyse.");
+        setError(data.error || t.home.analyzeError);
         return;
       }
       setResult(data as AnalysisResult);
     } catch {
-      setError("Erreur de connexion. Réessayez.");
+      setError(t.common.connectionError);
     } finally {
       setLoading(false);
     }
@@ -61,14 +64,17 @@ export default function Home() {
             <span className="text-luxe-fg"> Friendly</span>
           </h1>
           <p className="text-luxe-fg-muted mt-2 text-sm tracking-wide">
-            Vérifiez si votre site est lisible et optimisé pour l&apos;IA
+            {t.home.subtitle}
           </p>
-          <Link
-            href="/dashboard"
-            className="absolute top-8 right-6 rounded-lg border border-luxe-border text-sm text-luxe-fg-muted hover:text-luxe-gold hover:border-luxe-gold/30 px-4 py-2 transition-colors"
-          >
-            Mon espace
-          </Link>
+          <div className="absolute top-8 right-6 flex items-center gap-2">
+            <LanguageSwitcher />
+            <Link
+              href="/dashboard"
+              className="rounded-lg border border-luxe-border text-sm text-luxe-fg-muted hover:text-luxe-gold hover:border-luxe-gold/30 px-4 py-2 transition-colors"
+            >
+              {t.home.dashboardLink}
+            </Link>
+          </div>
           <div className="absolute bottom-0 left-0 w-24 h-px bg-gradient-to-r from-luxe-gold to-transparent" aria-hidden />
         </div>
       </header>
@@ -76,13 +82,13 @@ export default function Home() {
       <main className="relative max-w-3xl mx-auto px-6 py-12">
         <article className="mb-10">
           <h2 className="font-display text-2xl font-semibold text-luxe-fg mb-4">
-            Analysez la lisibilité IA de votre site web
+            {t.home.articleTitle}
           </h2>
           <p className="text-luxe-fg-muted leading-relaxed mb-4">
-            AI Friendly est un outil gratuit qui évalue si votre site est optimisé pour les moteurs et assistants d&apos;intelligence artificielle comme ChatGPT, Claude, Gemini et autres LLMs. Entrez une URL ci-dessous pour obtenir un score de lisibilité sur 10, des recommandations personnalisées et un aperçu de ce que voit une IA.
+            {t.home.articleP1}
           </p>
           <p className="text-luxe-fg-muted leading-relaxed text-sm">
-            Notre analyse vérifie les métadonnées (title, description, Open Graph, Schema.org), la structure du contenu (balises sémantiques, hiérarchie des titres) et l&apos;accessibilité aux bots (robots.txt, sitemap, llms.txt).
+            {t.home.articleP2}
           </p>
         </article>
 
@@ -92,10 +98,10 @@ export default function Home() {
               type="url"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
-              placeholder="https://exemple.com"
+              placeholder={t.home.urlPlaceholder}
               className="flex-1 rounded-lg border border-luxe-border bg-luxe-bg-elevated px-5 py-3.5 text-luxe-fg placeholder-luxe-fg-muted/70 focus:outline-none focus:ring-1 focus:ring-luxe-border-focus focus:border-luxe-border-focus transition-colors disabled:opacity-60"
               disabled={loading}
-              aria-label="URL à analyser"
+              aria-label={t.home.urlLabel}
             />
             <button
               type="submit"
@@ -105,10 +111,10 @@ export default function Home() {
               {loading ? (
                 <span className="inline-flex items-center gap-2">
                   <span className="size-3 rounded-full border-2 border-luxe-gold border-t-transparent animate-spin" aria-hidden />
-                  Analyse…
+                  {t.home.analyzingButton}
                 </span>
               ) : (
-                "Analyser"
+                t.home.analyzeButton
               )}
             </button>
           </div>
@@ -122,13 +128,13 @@ export default function Home() {
         {result && (
           <section className="mt-14 space-y-10" aria-labelledby="results-heading">
             <h2 id="results-heading" className="sr-only">
-              Résultats de l&apos;analyse
+              {t.home.resultsHeading}
             </h2>
 
             <article className="rounded-2xl bg-luxe-bg-elevated border border-luxe-border shadow-luxe overflow-hidden">
               <div className="px-8 py-5 border-b border-luxe-border bg-luxe-bg-muted/50">
                 <h3 className="font-display text-xl font-semibold text-luxe-fg">
-                  Score de lisibilité IA
+                  {t.home.scoreTitle}
                 </h3>
                 <p className="text-sm text-luxe-fg-muted mt-1 truncate max-w-full" title={result.url}>
                   {result.url}
@@ -159,10 +165,10 @@ export default function Home() {
               <article className="rounded-2xl bg-luxe-bg-elevated border border-luxe-border shadow-luxe overflow-hidden">
                 <div className="px-8 py-5 border-b border-luxe-border bg-luxe-bg-muted/50">
                   <h3 className="font-display text-xl font-semibold text-luxe-fg">
-                    Éléments à améliorer
+                    {t.home.improvementsTitle}
                   </h3>
                   <p className="text-sm text-luxe-fg-muted mt-1">
-                    Ces modifications amélioreront la lisibilité pour les IA
+                    {t.home.improvementsSubtitle}
                   </p>
                 </div>
                 <ul className="divide-y divide-luxe-border">
@@ -176,10 +182,10 @@ export default function Home() {
             <article className="rounded-2xl bg-luxe-bg-elevated border border-luxe-border shadow-luxe overflow-hidden">
               <div className="px-8 py-5 border-b border-luxe-border bg-luxe-bg-muted/50">
                 <h3 className="font-display text-xl font-semibold text-luxe-fg">
-                  Aperçu IA
+                  {t.home.aiPreviewTitle}
                 </h3>
                 <p className="text-sm text-luxe-fg-muted mt-1">
-                  Ce que verrait un assistant comme ChatGPT — représentation structurée
+                  {t.home.aiPreviewSubtitle}
                 </p>
               </div>
               <div className="p-5 overflow-auto preview-scroll max-h-[420px] bg-luxe-bg-muted rounded-b-2xl">
@@ -196,11 +202,10 @@ export default function Home() {
         <div className="max-w-3xl mx-auto px-6 text-center">
           <p className="text-luxe-fg font-medium mb-2">AI Friendly</p>
           <p className="text-sm text-luxe-fg-muted mb-4">
-            Outil d&apos;analyse de lisibilité pour l&apos;intelligence artificielle
+            {t.home.footerTool}
           </p>
           <p className="text-xs text-luxe-fg-muted">
-            Optimisez votre site pour ChatGPT, Claude, Gemini et les autres assistants IA. 
-            Améliorez votre visibilité dans les réponses générées par les LLMs.
+            {t.home.footerSeo}
           </p>
         </div>
       </footer>
@@ -209,6 +214,7 @@ export default function Home() {
 }
 
 function ImprovementItem({ item }: { item: Improvement }) {
+  const { t } = useI18n();
   const severityStyles = {
     critical: "bg-[var(--luxe-score-low)]/15 text-[var(--luxe-score-low)] border border-[var(--luxe-score-low)]/20",
     warning: "bg-[var(--luxe-score-mid)]/15 text-[var(--luxe-score-mid)] border border-[var(--luxe-score-mid)]/20",
@@ -220,11 +226,7 @@ function ImprovementItem({ item }: { item: Improvement }) {
         <span
           className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium tracking-wide ${severityStyles[item.severity]}`}
         >
-          {item.severity === "critical"
-            ? "Critique"
-            : item.severity === "warning"
-            ? "Attention"
-            : "Info"}
+          {t.common.severity[item.severity]}
         </span>
         <span className="text-xs text-luxe-fg-muted">
           {item.category}

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
+import { useI18n } from "@/lib/i18n/context";
 
 interface Site {
   id: string;
@@ -14,14 +15,8 @@ interface Site {
   lastScore: number | null;
 }
 
-const FREQUENCY_LABELS: Record<string, string> = {
-  "6h": "Toutes les 6h",
-  daily: "Quotidienne",
-  weekly: "Hebdomadaire",
-  monthly: "Mensuelle",
-};
-
 export default function SitesPage() {
+  const { t } = useI18n();
   const [sites, setSites] = useState<Site[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -64,7 +59,7 @@ export default function SitesPage() {
       });
       if (!res.ok) {
         const data = await res.json();
-        setError(data.error || "Erreur lors de l'enregistrement.");
+        setError(data.error || t.sites.saveError);
         return;
       }
       setShowForm(false);
@@ -72,14 +67,14 @@ export default function SitesPage() {
       setFormData({ name: "", url: "", frequency: "daily" });
       fetchSites();
     } catch {
-      setError("Erreur de connexion.");
+      setError(t.common.connectionError);
     } finally {
       setSaving(false);
     }
   }
 
   async function handleDelete(siteId: string) {
-    if (!confirm("Supprimer ce site et tout son historique ?")) return;
+    if (!confirm(t.sites.confirmDelete)) return;
     await fetch(`/api/sites/${siteId}`, { method: "DELETE" });
     fetchSites();
   }
@@ -111,10 +106,10 @@ export default function SitesPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="font-display text-2xl font-semibold text-luxe-fg">
-            Mes sites
+            {t.sites.title}
           </h1>
           <p className="text-sm text-luxe-fg-muted mt-1">
-            Gérez vos sites et leurs analyses programmées
+            {t.sites.subtitle}
           </p>
         </div>
         {!showForm && (
@@ -126,7 +121,7 @@ export default function SitesPage() {
             }}
             className="rounded-lg border border-luxe-gold bg-luxe-gold/10 text-luxe-gold px-5 py-2.5 text-sm font-medium hover:bg-luxe-gold/20 transition-colors"
           >
-            + Ajouter un site
+            {t.sites.addSiteButton}
           </button>
         )}
       </div>
@@ -138,7 +133,7 @@ export default function SitesPage() {
           className="rounded-2xl bg-luxe-bg-elevated border border-luxe-border shadow-luxe p-6 space-y-4"
         >
           <h2 className="font-display text-lg font-semibold text-luxe-fg">
-            {editingSite ? "Modifier le site" : "Ajouter un site"}
+            {editingSite ? t.sites.editSite : t.sites.addSiteForm}
           </h2>
 
           {error && (
@@ -148,7 +143,7 @@ export default function SitesPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs text-luxe-fg-muted mb-1.5">
-                Nom du site
+                {t.sites.siteName}
               </label>
               <input
                 type="text"
@@ -156,14 +151,14 @@ export default function SitesPage() {
                 onChange={(e) =>
                   setFormData({ ...formData, name: e.target.value })
                 }
-                placeholder="Mon site web"
+                placeholder={t.sites.siteNamePlaceholder}
                 required
                 className="w-full rounded-lg border border-luxe-border bg-luxe-bg px-4 py-2.5 text-sm text-luxe-fg placeholder-luxe-fg-muted/70 focus:outline-none focus:ring-1 focus:ring-luxe-border-focus"
               />
             </div>
             <div>
               <label className="block text-xs text-luxe-fg-muted mb-1.5">
-                URL
+                {t.sites.url}
               </label>
               <input
                 type="url"
@@ -171,7 +166,7 @@ export default function SitesPage() {
                 onChange={(e) =>
                   setFormData({ ...formData, url: e.target.value })
                 }
-                placeholder="https://exemple.com"
+                placeholder={t.sites.urlPlaceholder}
                 required
                 className="w-full rounded-lg border border-luxe-border bg-luxe-bg px-4 py-2.5 text-sm text-luxe-fg placeholder-luxe-fg-muted/70 focus:outline-none focus:ring-1 focus:ring-luxe-border-focus"
               />
@@ -180,7 +175,7 @@ export default function SitesPage() {
 
           <div>
             <label className="block text-xs text-luxe-fg-muted mb-1.5">
-              Fréquence d&apos;analyse
+              {t.sites.analysisFrequency}
             </label>
             <select
               value={formData.frequency}
@@ -189,10 +184,10 @@ export default function SitesPage() {
               }
               className="w-full sm:w-auto rounded-lg border border-luxe-border bg-luxe-bg px-4 py-2.5 text-sm text-luxe-fg focus:outline-none focus:ring-1 focus:ring-luxe-border-focus"
             >
-              <option value="6h">Toutes les 6 heures</option>
-              <option value="daily">Quotidienne</option>
-              <option value="weekly">Hebdomadaire</option>
-              <option value="monthly">Mensuelle</option>
+              <option value="6h">{t.sites.frequencyOptions["6h"]}</option>
+              <option value="daily">{t.sites.frequencyOptions.daily}</option>
+              <option value="weekly">{t.sites.frequencyOptions.weekly}</option>
+              <option value="monthly">{t.sites.frequencyOptions.monthly}</option>
             </select>
           </div>
 
@@ -202,14 +197,14 @@ export default function SitesPage() {
               disabled={saving}
               className="rounded-lg border border-luxe-gold bg-luxe-gold/10 text-luxe-gold px-6 py-2.5 text-sm font-medium hover:bg-luxe-gold/20 disabled:opacity-50 transition-colors"
             >
-              {saving ? "Enregistrement…" : editingSite ? "Modifier" : "Ajouter"}
+              {saving ? t.sites.savingButton : editingSite ? t.common.edit : t.common.add}
             </button>
             <button
               type="button"
               onClick={cancelForm}
               className="rounded-lg border border-luxe-border text-luxe-fg-muted px-6 py-2.5 text-sm hover:bg-luxe-bg-muted transition-colors"
             >
-              Annuler
+              {t.common.cancel}
             </button>
           </div>
         </form>
@@ -219,13 +214,13 @@ export default function SitesPage() {
       {sites.length === 0 && !showForm ? (
         <div className="rounded-2xl bg-luxe-bg-elevated border border-luxe-border shadow-luxe p-12 text-center">
           <p className="text-luxe-fg-muted mb-4">
-            Vous n&apos;avez pas encore de site enregistré.
+            {t.sites.noSitesYet}
           </p>
           <button
             onClick={() => setShowForm(true)}
             className="inline-flex items-center gap-2 rounded-lg border border-luxe-gold bg-luxe-gold/10 text-luxe-gold px-5 py-2.5 text-sm font-medium hover:bg-luxe-gold/20 transition-colors"
           >
-            + Ajouter votre premier site
+            {t.sites.addFirstSite}
           </button>
         </div>
       ) : (
@@ -242,7 +237,7 @@ export default function SitesPage() {
                   </h3>
                   {!site.isActive && (
                     <span className="text-[10px] text-luxe-fg-muted border border-luxe-border rounded-full px-2 py-0.5">
-                      Inactif
+                      {t.sites.inactive}
                     </span>
                   )}
                 </div>
@@ -250,9 +245,9 @@ export default function SitesPage() {
                   {site.url}
                 </p>
                 <div className="flex items-center gap-3 mt-2 text-xs text-luxe-fg-muted">
-                  <span>{FREQUENCY_LABELS[site.frequency] || site.frequency}</span>
+                  <span>{t.common.frequency[site.frequency as keyof typeof t.common.frequency] || site.frequency}</span>
                   <span>&middot;</span>
-                  <span>{site._count.analyses} analyse(s)</span>
+                  <span>{t.sites.analysisCount(site._count.analyses)}</span>
                 </div>
               </div>
 
@@ -275,19 +270,19 @@ export default function SitesPage() {
                   href={`/dashboard/sites/${site.id}`}
                   className="rounded-lg border border-luxe-border text-luxe-fg-muted px-3 py-1.5 text-xs hover:bg-luxe-bg-muted transition-colors"
                 >
-                  Historique
+                  {t.sites.history}
                 </Link>
                 <button
                   onClick={() => startEdit(site)}
                   className="rounded-lg border border-luxe-border text-luxe-fg-muted px-3 py-1.5 text-xs hover:bg-luxe-bg-muted transition-colors"
                 >
-                  Modifier
+                  {t.common.edit}
                 </button>
                 <button
                   onClick={() => handleDelete(site.id)}
                   className="rounded-lg border border-luxe-score-low/30 text-luxe-score-low px-3 py-1.5 text-xs hover:bg-luxe-score-low/10 transition-colors"
                 >
-                  Supprimer
+                  {t.common.delete}
                 </button>
               </div>
             </div>

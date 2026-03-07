@@ -1,0 +1,200 @@
+import type { Dictionary } from "../types";
+
+const en: Dictionary = {
+  common: {
+    aiReadabilityScore: "AI Readability Score",
+    score: "Score",
+    share: "Share",
+    copied: "Copied",
+    copy: "Copy",
+    back: "Back",
+    cancel: "Cancel",
+    save: "Save",
+    delete: "Delete",
+    edit: "Edit",
+    add: "Add",
+    loading: "Loading…",
+    connectionError: "Connection error. Please try again.",
+    error: "Error",
+    noData: "No data",
+    analyze: "Analyze",
+    analyzing: "Analyzing…",
+    severity: { critical: "Critical", warning: "Warning", info: "Info" },
+    frequency: {
+      "6h": "Every 6h",
+      daily: "Daily",
+      weekly: "Weekly",
+      monthly: "Monthly",
+    },
+  },
+
+  meta: {
+    title: "AI Friendly — Check if your site is AI-readable",
+    description:
+      "Analyze any URL to see if it's optimized for AI engines and assistants (ChatGPT, etc.). Score, recommendations and AI preview.",
+    ogAlt: "AI Friendly - Analyze your site's AI readability",
+  },
+
+  home: {
+    subtitle: "Check if your site is readable and optimized for AI",
+    dashboardLink: "My dashboard",
+    articleTitle: "Analyze your website's AI readability",
+    articleP1:
+      "AI Friendly is a free tool that evaluates whether your site is optimized for artificial intelligence engines and assistants like ChatGPT, Claude, Gemini and other LLMs. Enter a URL below to get a readability score out of 10, personalized recommendations and a preview of what an AI sees.",
+    articleP2:
+      "Our analysis checks metadata (title, description, Open Graph, Schema.org), content structure (semantic tags, heading hierarchy) and bot accessibility (robots.txt, sitemap, llms.txt).",
+    urlPlaceholder: "https://example.com",
+    urlLabel: "URL to analyze",
+    analyzeButton: "Analyze",
+    analyzingButton: "Analyzing…",
+    emptyUrlError: "Please enter a URL.",
+    analyzeError: "Error during analysis.",
+    resultsHeading: "Analysis Results",
+    scoreTitle: "AI Readability Score",
+    improvementsTitle: "Improvements needed",
+    improvementsSubtitle:
+      "These changes will improve AI readability",
+    aiPreviewTitle: "AI Preview",
+    aiPreviewSubtitle:
+      "What an assistant like ChatGPT would see — structured representation",
+    footerTool: "Readability analysis tool for artificial intelligence",
+    footerSeo:
+      "Optimize your site for ChatGPT, Claude, Gemini and other AI assistants. Improve your visibility in LLM-generated responses.",
+  },
+
+  auth: {
+    signInSubtitle: "Sign in to manage your sites",
+    oauthError:
+      "An account already exists with this email address. Sign in with the original provider.",
+    genericError: "Sign-in error. Please try again.",
+    continueGoogle: "Continue with Google",
+    continueMicrosoft: "Continue with Microsoft",
+    backToHome: "Back to home",
+  },
+
+  shareSection: {
+    shareText: (score, url) =>
+      `My site ${url} scored ${score}/10 on AI Friendly — Check if your site is AI-readable!`,
+    shareTitle: "AI Friendly — Analysis Result",
+    shareOnX: "Share on X (Twitter)",
+    shareOnLinkedIn: "Share on LinkedIn",
+    shareOnFacebook: "Share on Facebook",
+    shareNative: "Share (native menu)",
+    copyLink: "Copy link",
+  },
+
+  dashboard: {
+    title: "Dashboard",
+    subtitle: "Overview of your analyses",
+    registeredSites: "Registered sites",
+    averageScore: "Average score",
+    recentAnalyses: "Recent analyses",
+    viewAllSites: "View all sites",
+    noAnalysesYet: "No analyses yet.",
+    addSite: "Add a site",
+    nav: {
+      dashboard: "Dashboard",
+      mySites: "My sites",
+    },
+    signOut: "Sign out",
+  },
+
+  sites: {
+    title: "My sites",
+    subtitle: "Manage your sites and scheduled analyses",
+    addSiteButton: "+ Add a site",
+    editSite: "Edit site",
+    addSiteForm: "Add a site",
+    siteName: "Site name",
+    siteNamePlaceholder: "My website",
+    url: "URL",
+    urlPlaceholder: "https://example.com",
+    analysisFrequency: "Analysis frequency",
+    frequencyOptions: {
+      "6h": "Every 6 hours",
+      daily: "Daily",
+      weekly: "Weekly",
+      monthly: "Monthly",
+    },
+    savingButton: "Saving…",
+    noSitesYet: "You don't have any registered sites yet.",
+    addFirstSite: "+ Add your first site",
+    inactive: "Inactive",
+    analysisCount: (n) => `${n} analysis(es)`,
+    history: "History",
+    confirmDelete: "Delete this site and all its history?",
+    saveError: "Error saving.",
+  },
+
+  siteDetail: {
+    mySites: "My sites",
+    analysisLabel: "Analysis",
+    siteNotFound: "Site not found.",
+    tabs: {
+      ai: "AI Accessibility",
+      availability: "Availability",
+      security: "Security",
+    },
+    ai: {
+      title: "AI Accessibility",
+      analyzeButton: "Analyze",
+      analyzingButton: "Analyzing…",
+      suggestedImprovements: "Suggested improvements",
+      perfectScore: "Perfect score!",
+      aiPreview: "AI Preview",
+      scoreEvolution: "Score evolution",
+      analysisHistory: "Analysis history",
+      analysisHistoryHint:
+        "Click for details (kept 60 days)",
+      noAnalysis: "No analysis.",
+    },
+    availability: {
+      title: "Availability",
+      checkButton: "Check",
+      checkingButton: "Checking…",
+      currentScore: "Current score",
+      http: "HTTP",
+      ping: "Ping",
+      loadTime: "Load time",
+      scoreTrend: "Availability score trend",
+      responseTime: "Response time",
+      checkHistory: "Check history",
+      checkHistoryHint:
+        "Checked every minute — click for details",
+      noCheck: "No checks yet.",
+      noCheckHint: 'Click "Check" to run the first one.',
+      httpStatus: "HTTP Status",
+      ttfb: "TTFB",
+      size: "Size",
+      ssl: "SSL",
+      sslValid: "Valid",
+      sslInvalid: "Invalid",
+      checkDetails: "Check details",
+    },
+    security: {
+      title: "OWASP Security",
+      scanButton: "Scan",
+      scanningButton: "Scanning…",
+      global: "Overall",
+      headers: "Headers",
+      sslTls: "SSL/TLS",
+      cookies: "Cookies",
+      infoLeak: "Info leak",
+      injection: "Injection",
+      scoreTrend: "Security score trend",
+      scanHistory: "Scan history",
+      scanHistoryHint:
+        "Scanned every hour — click for details",
+      noScan: "No scans yet.",
+      noScanHint: 'Click "Scan" to run the first one.',
+      recommendations: "Recommendations",
+      catHeaders: "Security headers",
+      catSsl: "SSL/TLS",
+      catCookies: "Cookies",
+      catInfoLeak: "Information leakage",
+      catInjection: "Injection / XSS",
+    },
+  },
+};
+
+export default en;

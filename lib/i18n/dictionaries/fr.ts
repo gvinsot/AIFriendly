@@ -1,0 +1,201 @@
+import type { Dictionary } from "../types";
+
+const fr: Dictionary = {
+  common: {
+    aiReadabilityScore: "Score de lisibilité IA",
+    score: "Score",
+    share: "Partager",
+    copied: "Copié",
+    copy: "Copier",
+    back: "Retour",
+    cancel: "Annuler",
+    save: "Enregistrer",
+    delete: "Supprimer",
+    edit: "Modifier",
+    add: "Ajouter",
+    loading: "Chargement…",
+    connectionError: "Erreur de connexion. Réessayez.",
+    error: "Erreur",
+    noData: "Aucune donnée",
+    analyze: "Analyser",
+    analyzing: "Analyse…",
+    severity: { critical: "Critique", warning: "Attention", info: "Info" },
+    frequency: {
+      "6h": "Toutes les 6h",
+      daily: "Quotidienne",
+      weekly: "Hebdomadaire",
+      monthly: "Mensuelle",
+    },
+  },
+
+  meta: {
+    title: "AI Friendly — Vérifiez si votre site est lisible par l'IA",
+    description:
+      "Analysez n'importe quelle URL pour savoir si elle est optimisée pour les moteurs et assistants IA (ChatGPT, etc.). Score, recommandations et aperçu IA.",
+    ogAlt: "AI Friendly - Analysez la lisibilité IA de votre site",
+  },
+
+  home: {
+    subtitle: "Vérifiez si votre site est lisible et optimisé pour l'IA",
+    dashboardLink: "Mon espace",
+    articleTitle: "Analysez la lisibilité IA de votre site web",
+    articleP1:
+      "AI Friendly est un outil gratuit qui évalue si votre site est optimisé pour les moteurs et assistants d'intelligence artificielle comme ChatGPT, Claude, Gemini et autres LLMs. Entrez une URL ci-dessous pour obtenir un score de lisibilité sur 10, des recommandations personnalisées et un aperçu de ce que voit une IA.",
+    articleP2:
+      "Notre analyse vérifie les métadonnées (title, description, Open Graph, Schema.org), la structure du contenu (balises sémantiques, hiérarchie des titres) et l'accessibilité aux bots (robots.txt, sitemap, llms.txt).",
+    urlPlaceholder: "https://exemple.com",
+    urlLabel: "URL à analyser",
+    analyzeButton: "Analyser",
+    analyzingButton: "Analyse…",
+    emptyUrlError: "Veuillez saisir une URL.",
+    analyzeError: "Erreur lors de l'analyse.",
+    resultsHeading: "Résultats de l'analyse",
+    scoreTitle: "Score de lisibilité IA",
+    improvementsTitle: "Éléments à améliorer",
+    improvementsSubtitle:
+      "Ces modifications amélioreront la lisibilité pour les IA",
+    aiPreviewTitle: "Aperçu IA",
+    aiPreviewSubtitle:
+      "Ce que verrait un assistant comme ChatGPT — représentation structurée",
+    footerTool:
+      "Outil d'analyse de lisibilité pour l'intelligence artificielle",
+    footerSeo:
+      "Optimisez votre site pour ChatGPT, Claude, Gemini et les autres assistants IA. Améliorez votre visibilité dans les réponses générées par les LLMs.",
+  },
+
+  auth: {
+    signInSubtitle: "Connectez-vous pour gérer vos sites",
+    oauthError:
+      "Un compte existe déjà avec cette adresse email. Connectez-vous avec le fournisseur original.",
+    genericError: "Erreur de connexion. Réessayez.",
+    continueGoogle: "Continuer avec Google",
+    continueMicrosoft: "Continuer avec Microsoft",
+    backToHome: "Retour à l'accueil",
+  },
+
+  shareSection: {
+    shareText: (score, url) =>
+      `Mon site ${url} a obtenu ${score}/10 sur AI Friendly — Vérifiez si votre site est lisible par l'IA !`,
+    shareTitle: "AI Friendly — Résultat d'analyse",
+    shareOnX: "Partager sur X (Twitter)",
+    shareOnLinkedIn: "Partager sur LinkedIn",
+    shareOnFacebook: "Partager sur Facebook",
+    shareNative: "Partager (menu natif)",
+    copyLink: "Copier le lien",
+  },
+
+  dashboard: {
+    title: "Tableau de bord",
+    subtitle: "Vue d'ensemble de vos analyses",
+    registeredSites: "Sites enregistrés",
+    averageScore: "Score moyen",
+    recentAnalyses: "Analyses récentes",
+    viewAllSites: "Voir tous les sites",
+    noAnalysesYet: "Aucune analyse pour le moment.",
+    addSite: "Ajouter un site",
+    nav: {
+      dashboard: "Tableau de bord",
+      mySites: "Mes sites",
+    },
+    signOut: "Déconnexion",
+  },
+
+  sites: {
+    title: "Mes sites",
+    subtitle: "Gérez vos sites et leurs analyses programmées",
+    addSiteButton: "+ Ajouter un site",
+    editSite: "Modifier le site",
+    addSiteForm: "Ajouter un site",
+    siteName: "Nom du site",
+    siteNamePlaceholder: "Mon site web",
+    url: "URL",
+    urlPlaceholder: "https://exemple.com",
+    analysisFrequency: "Fréquence d'analyse",
+    frequencyOptions: {
+      "6h": "Toutes les 6 heures",
+      daily: "Quotidienne",
+      weekly: "Hebdomadaire",
+      monthly: "Mensuelle",
+    },
+    savingButton: "Enregistrement…",
+    noSitesYet: "Vous n'avez pas encore de site enregistré.",
+    addFirstSite: "+ Ajouter votre premier site",
+    inactive: "Inactif",
+    analysisCount: (n) => `${n} analyse(s)`,
+    history: "Historique",
+    confirmDelete: "Supprimer ce site et tout son historique ?",
+    saveError: "Erreur lors de l'enregistrement.",
+  },
+
+  siteDetail: {
+    mySites: "Mes sites",
+    analysisLabel: "Analyse",
+    siteNotFound: "Site introuvable.",
+    tabs: {
+      ai: "Accessibilité IA",
+      availability: "Disponibilité",
+      security: "Sécurité",
+    },
+    ai: {
+      title: "Accessibilité IA",
+      analyzeButton: "Analyser",
+      analyzingButton: "Analyse…",
+      suggestedImprovements: "Améliorations suggérées",
+      perfectScore: "Score parfait !",
+      aiPreview: "Aperçu IA",
+      scoreEvolution: "Évolution du score",
+      analysisHistory: "Historique des analyses",
+      analysisHistoryHint:
+        "Cliquez pour voir les détails (conservé 60 jours)",
+      noAnalysis: "Aucune analyse.",
+    },
+    availability: {
+      title: "Disponibilité",
+      checkButton: "Checker",
+      checkingButton: "Check…",
+      currentScore: "Score actuel",
+      http: "HTTP",
+      ping: "Ping",
+      loadTime: "Chargement",
+      scoreTrend: "Tendance du score de disponibilité",
+      responseTime: "Temps de réponse",
+      checkHistory: "Historique des checks",
+      checkHistoryHint:
+        "Check toutes les minutes — cliquez pour les détails",
+      noCheck: "Aucun check.",
+      noCheckHint: 'Cliquez sur "Checker" pour lancer le premier.',
+      httpStatus: "Statut HTTP",
+      ttfb: "TTFB",
+      size: "Taille",
+      ssl: "SSL",
+      sslValid: "Valide",
+      sslInvalid: "Invalide",
+      checkDetails: "Détails du check",
+    },
+    security: {
+      title: "Sécurité OWASP",
+      scanButton: "Scanner",
+      scanningButton: "Scan…",
+      global: "Global",
+      headers: "Headers",
+      sslTls: "SSL/TLS",
+      cookies: "Cookies",
+      infoLeak: "Fuites info",
+      injection: "Injection",
+      scoreTrend: "Tendance des scores de sécurité",
+      scanHistory: "Historique des scans",
+      scanHistoryHint:
+        "Scan toutes les heures — cliquez pour les détails",
+      noScan: "Aucun scan.",
+      noScanHint: 'Cliquez sur "Scanner" pour lancer le premier.',
+      recommendations: "Recommandations",
+      catHeaders: "Headers de sécurité",
+      catSsl: "SSL/TLS",
+      catCookies: "Cookies",
+      catInfoLeak: "Fuites d'information",
+      catInjection: "Injection / XSS",
+    },
+  },
+};
+
+export default fr;

@@ -1,0 +1,201 @@
+import type { Dictionary } from "../types";
+
+const es: Dictionary = {
+  common: {
+    aiReadabilityScore: "Puntuación de legibilidad IA",
+    score: "Puntuación",
+    share: "Compartir",
+    copied: "Copiado",
+    copy: "Copiar",
+    back: "Volver",
+    cancel: "Cancelar",
+    save: "Guardar",
+    delete: "Eliminar",
+    edit: "Editar",
+    add: "Añadir",
+    loading: "Cargando…",
+    connectionError: "Error de conexión. Inténtelo de nuevo.",
+    error: "Error",
+    noData: "Sin datos",
+    analyze: "Analizar",
+    analyzing: "Analizando…",
+    severity: { critical: "Crítico", warning: "Advertencia", info: "Info" },
+    frequency: {
+      "6h": "Cada 6h",
+      daily: "Diario",
+      weekly: "Semanal",
+      monthly: "Mensual",
+    },
+  },
+
+  meta: {
+    title: "AI Friendly — Comprueba si tu sitio es legible por la IA",
+    description:
+      "Analiza cualquier URL para saber si está optimizada para motores y asistentes de IA (ChatGPT, etc.). Puntuación, recomendaciones y vista previa IA.",
+    ogAlt: "AI Friendly - Analiza la legibilidad IA de tu sitio",
+  },
+
+  home: {
+    subtitle: "Comprueba si tu sitio es legible y está optimizado para la IA",
+    dashboardLink: "Mi panel",
+    articleTitle: "Analiza la legibilidad IA de tu sitio web",
+    articleP1:
+      "AI Friendly es una herramienta gratuita que evalúa si tu sitio está optimizado para los motores y asistentes de inteligencia artificial como ChatGPT, Claude, Gemini y otros LLMs. Introduce una URL a continuación para obtener una puntuación de legibilidad sobre 10, recomendaciones personalizadas y una vista previa de lo que ve una IA.",
+    articleP2:
+      "Nuestro análisis verifica los metadatos (title, description, Open Graph, Schema.org), la estructura del contenido (etiquetas semánticas, jerarquía de títulos) y la accesibilidad para bots (robots.txt, sitemap, llms.txt).",
+    urlPlaceholder: "https://ejemplo.com",
+    urlLabel: "URL a analizar",
+    analyzeButton: "Analizar",
+    analyzingButton: "Analizando…",
+    emptyUrlError: "Por favor, introduzca una URL.",
+    analyzeError: "Error durante el análisis.",
+    resultsHeading: "Resultados del análisis",
+    scoreTitle: "Puntuación de legibilidad IA",
+    improvementsTitle: "Elementos a mejorar",
+    improvementsSubtitle:
+      "Estos cambios mejorarán la legibilidad para las IA",
+    aiPreviewTitle: "Vista previa IA",
+    aiPreviewSubtitle:
+      "Lo que vería un asistente como ChatGPT — representación estructurada",
+    footerTool:
+      "Herramienta de análisis de legibilidad para inteligencia artificial",
+    footerSeo:
+      "Optimiza tu sitio para ChatGPT, Claude, Gemini y otros asistentes IA. Mejora tu visibilidad en las respuestas generadas por LLMs.",
+  },
+
+  auth: {
+    signInSubtitle: "Inicia sesión para gestionar tus sitios",
+    oauthError:
+      "Ya existe una cuenta con esta dirección de correo. Inicia sesión con el proveedor original.",
+    genericError: "Error de inicio de sesión. Inténtelo de nuevo.",
+    continueGoogle: "Continuar con Google",
+    continueMicrosoft: "Continuar con Microsoft",
+    backToHome: "Volver al inicio",
+  },
+
+  shareSection: {
+    shareText: (score, url) =>
+      `Mi sitio ${url} obtuvo ${score}/10 en AI Friendly — ¡Comprueba si tu sitio es legible por la IA!`,
+    shareTitle: "AI Friendly — Resultado del análisis",
+    shareOnX: "Compartir en X (Twitter)",
+    shareOnLinkedIn: "Compartir en LinkedIn",
+    shareOnFacebook: "Compartir en Facebook",
+    shareNative: "Compartir (menú nativo)",
+    copyLink: "Copiar enlace",
+  },
+
+  dashboard: {
+    title: "Panel de control",
+    subtitle: "Vista general de tus análisis",
+    registeredSites: "Sitios registrados",
+    averageScore: "Puntuación media",
+    recentAnalyses: "Análisis recientes",
+    viewAllSites: "Ver todos los sitios",
+    noAnalysesYet: "Todavía no hay análisis.",
+    addSite: "Añadir un sitio",
+    nav: {
+      dashboard: "Panel",
+      mySites: "Mis sitios",
+    },
+    signOut: "Cerrar sesión",
+  },
+
+  sites: {
+    title: "Mis sitios",
+    subtitle: "Gestiona tus sitios y sus análisis programados",
+    addSiteButton: "+ Añadir un sitio",
+    editSite: "Editar sitio",
+    addSiteForm: "Añadir un sitio",
+    siteName: "Nombre del sitio",
+    siteNamePlaceholder: "Mi sitio web",
+    url: "URL",
+    urlPlaceholder: "https://ejemplo.com",
+    analysisFrequency: "Frecuencia de análisis",
+    frequencyOptions: {
+      "6h": "Cada 6 horas",
+      daily: "Diario",
+      weekly: "Semanal",
+      monthly: "Mensual",
+    },
+    savingButton: "Guardando…",
+    noSitesYet: "Todavía no tienes sitios registrados.",
+    addFirstSite: "+ Añadir tu primer sitio",
+    inactive: "Inactivo",
+    analysisCount: (n) => `${n} análisis`,
+    history: "Historial",
+    confirmDelete: "¿Eliminar este sitio y todo su historial?",
+    saveError: "Error al guardar.",
+  },
+
+  siteDetail: {
+    mySites: "Mis sitios",
+    analysisLabel: "Análisis",
+    siteNotFound: "Sitio no encontrado.",
+    tabs: {
+      ai: "Accesibilidad IA",
+      availability: "Disponibilidad",
+      security: "Seguridad",
+    },
+    ai: {
+      title: "Accesibilidad IA",
+      analyzeButton: "Analizar",
+      analyzingButton: "Analizando…",
+      suggestedImprovements: "Mejoras sugeridas",
+      perfectScore: "¡Puntuación perfecta!",
+      aiPreview: "Vista previa IA",
+      scoreEvolution: "Evolución de la puntuación",
+      analysisHistory: "Historial de análisis",
+      analysisHistoryHint:
+        "Haz clic para ver los detalles (conservado 60 días)",
+      noAnalysis: "Sin análisis.",
+    },
+    availability: {
+      title: "Disponibilidad",
+      checkButton: "Verificar",
+      checkingButton: "Verificando…",
+      currentScore: "Puntuación actual",
+      http: "HTTP",
+      ping: "Ping",
+      loadTime: "Carga",
+      scoreTrend: "Tendencia de la puntuación de disponibilidad",
+      responseTime: "Tiempo de respuesta",
+      checkHistory: "Historial de verificaciones",
+      checkHistoryHint:
+        "Verificación cada minuto — haz clic para los detalles",
+      noCheck: "Sin verificaciones.",
+      noCheckHint: 'Haz clic en "Verificar" para lanzar la primera.',
+      httpStatus: "Estado HTTP",
+      ttfb: "TTFB",
+      size: "Tamaño",
+      ssl: "SSL",
+      sslValid: "Válido",
+      sslInvalid: "Inválido",
+      checkDetails: "Detalles de la verificación",
+    },
+    security: {
+      title: "Seguridad OWASP",
+      scanButton: "Escanear",
+      scanningButton: "Escaneando…",
+      global: "Global",
+      headers: "Headers",
+      sslTls: "SSL/TLS",
+      cookies: "Cookies",
+      infoLeak: "Fugas de info",
+      injection: "Inyección",
+      scoreTrend: "Tendencia de las puntuaciones de seguridad",
+      scanHistory: "Historial de escaneos",
+      scanHistoryHint:
+        "Escaneo cada hora — haz clic para los detalles",
+      noScan: "Sin escaneos.",
+      noScanHint: 'Haz clic en "Escanear" para lanzar el primero.',
+      recommendations: "Recomendaciones",
+      catHeaders: "Headers de seguridad",
+      catSsl: "SSL/TLS",
+      catCookies: "Cookies",
+      catInfoLeak: "Fugas de información",
+      catInjection: "Inyección / XSS",
+    },
+  },
+};
+
+export default es;

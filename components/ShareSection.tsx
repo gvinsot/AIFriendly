@@ -2,15 +2,14 @@
 
 import { useState, useEffect } from "react";
 import type { AnalysisResult } from "@/lib/types";
+import { useI18n } from "@/lib/i18n/context";
 
 interface ShareSectionProps {
   result: AnalysisResult;
 }
 
-const SHARE_TEXT = (score: number, url: string) =>
-  `Mon site ${url} a obtenu ${score}/10 sur AI Friendly — Vérifiez si votre site est lisible par l'IA !`;
-
 export function ShareSection({ result }: ShareSectionProps) {
+  const { t } = useI18n();
   const [copied, setCopied] = useState(false);
   const [shareUrl, setShareUrl] = useState("");
   const [canNativeShare, setCanNativeShare] = useState(false);
@@ -20,7 +19,7 @@ export function ShareSection({ result }: ShareSectionProps) {
     );
     setCanNativeShare(typeof navigator !== "undefined" && !!navigator.share);
   }, [result.url, result.score]);
-  const text = SHARE_TEXT(result.score, result.url);
+  const text = t.shareSection.shareText(result.score, result.url);
 
   function handleCopyLink() {
     const urlToCopy = shareUrl || `${window.location.origin}?url=${encodeURIComponent(result.url)}&score=${result.score}`;
@@ -34,7 +33,7 @@ export function ShareSection({ result }: ShareSectionProps) {
   function handleShareNative() {
     if (typeof navigator !== "undefined" && navigator.share) {
       navigator.share({
-        title: "AI Friendly — Résultat d'analyse",
+        title: t.shareSection.shareTitle,
         text,
         url: shareUrl,
       }).catch(() => {});
@@ -50,7 +49,7 @@ export function ShareSection({ result }: ShareSectionProps) {
   return (
     <div className="flex flex-wrap items-center gap-3">
       <span className="text-sm text-luxe-fg-muted">
-        Partager
+        {t.common.share}
       </span>
       <div className="flex items-center gap-1.5">
         <a
@@ -58,7 +57,7 @@ export function ShareSection({ result }: ShareSectionProps) {
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex items-center justify-center w-10 h-10 rounded-lg border border-luxe-border bg-luxe-bg-muted hover:border-luxe-gold hover:bg-[rgba(34,211,238,0.08)] text-luxe-fg-muted hover:text-luxe-gold transition-all duration-200"
-          aria-label="Partager sur X (Twitter)"
+          aria-label={t.shareSection.shareOnX}
         >
           <XIcon />
         </a>
@@ -67,7 +66,7 @@ export function ShareSection({ result }: ShareSectionProps) {
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex items-center justify-center w-10 h-10 rounded-lg border border-luxe-border bg-luxe-bg-muted hover:border-luxe-gold hover:bg-[rgba(34,211,238,0.08)] text-luxe-fg-muted hover:text-luxe-gold transition-all duration-200"
-          aria-label="Partager sur LinkedIn"
+          aria-label={t.shareSection.shareOnLinkedIn}
         >
           <LinkedInIcon />
         </a>
@@ -76,7 +75,7 @@ export function ShareSection({ result }: ShareSectionProps) {
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex items-center justify-center w-10 h-10 rounded-lg border border-luxe-border bg-luxe-bg-muted hover:border-luxe-gold hover:bg-[rgba(34,211,238,0.08)] text-luxe-fg-muted hover:text-luxe-gold transition-all duration-200"
-          aria-label="Partager sur Facebook"
+          aria-label={t.shareSection.shareOnFacebook}
         >
           <FacebookIcon />
         </a>
@@ -85,7 +84,7 @@ export function ShareSection({ result }: ShareSectionProps) {
             type="button"
             onClick={handleShareNative}
             className="inline-flex items-center justify-center w-10 h-10 rounded-lg border border-luxe-border bg-luxe-bg-muted hover:border-luxe-gold hover:bg-[rgba(34,211,238,0.08)] text-luxe-fg-muted hover:text-luxe-gold transition-all duration-200"
-            aria-label="Partager (menu natif)"
+            aria-label={t.shareSection.shareNative}
           >
             <ShareIcon />
           </button>
@@ -94,7 +93,7 @@ export function ShareSection({ result }: ShareSectionProps) {
           type="button"
           onClick={handleCopyLink}
           className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border border-luxe-border bg-luxe-bg-muted hover:border-luxe-gold hover:bg-[rgba(34,211,238,0.08)] text-luxe-fg-muted hover:text-luxe-gold text-sm transition-all duration-200"
-          aria-label="Copier le lien"
+          aria-label={t.shareSection.copyLink}
         >
           {copied ? (
             <CheckIcon />
@@ -102,7 +101,7 @@ export function ShareSection({ result }: ShareSectionProps) {
             <LinkIcon />
           )}
           <span className="sr-only sm:not-sr-only">
-            {copied ? "Copié" : "Copier"}
+            {copied ? t.common.copied : t.common.copy}
           </span>
         </button>
       </div>
