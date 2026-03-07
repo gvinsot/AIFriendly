@@ -26,6 +26,8 @@ export async function GET(_req: NextRequest, context: RouteContext) {
     url: site.url,
     frequency: site.frequency,
     isActive: site.isActive,
+    availabilityEnabled: site.availabilityEnabled,
+    securityEnabled: site.securityEnabled,
   });
 }
 
