@@ -36,6 +36,12 @@ export function DashboardNav({ user }: DashboardNavProps) {
             >
               {t.dashboard.nav.mySites}
             </NavLink>
+            <NavLink
+              href="/dashboard/api-keys"
+              active={pathname.startsWith("/dashboard/api-keys")}
+            >
+              {t.dashboard.nav.apiKeys}
+            </NavLink>
           </nav>
         </div>
 

@@ -96,8 +96,26 @@ const fr: Dictionary = {
     nav: {
       dashboard: "Tableau de bord",
       mySites: "Mes sites",
+      apiKeys: "Clés API",
     },
     signOut: "Déconnexion",
+  },
+
+  apiKeys: {
+    title: "Clés API MCP",
+    subtitle: "Gérez vos clés API pour connecter des assistants IA via le protocole MCP",
+    createButton: "+ Nouvelle clé",
+    createTitle: "Créer une nouvelle clé API",
+    namePlaceholder: "Nom de la clé (ex. Claude Desktop)",
+    keyCreated: "Clé API créée avec succès !",
+    keyWarning: "Copiez cette clé maintenant — elle ne sera plus affichée.",
+    createError: "Erreur lors de la création de la clé.",
+    confirmDelete: "Supprimer cette clé API ? Les clients connectés perdront l'accès.",
+    noKeys: "Vous n'avez pas encore de clé API. Créez-en une pour connecter des assistants IA.",
+    created: "Créée le",
+    lastUsed: "Dernière utilisation",
+    mcpTitle: "Configuration MCP",
+    mcpDescription: "Ajoutez ceci aux paramètres MCP de votre assistant IA (ex. Claude Desktop) :",
   },
 
   sites: {

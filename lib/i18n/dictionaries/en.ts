@@ -95,8 +95,26 @@ const en: Dictionary = {
     nav: {
       dashboard: "Dashboard",
       mySites: "My sites",
+      apiKeys: "API Keys",
     },
     signOut: "Sign out",
+  },
+
+  apiKeys: {
+    title: "MCP API Keys",
+    subtitle: "Manage your API keys to connect AI assistants via the MCP protocol",
+    createButton: "+ New key",
+    createTitle: "Create a new API key",
+    namePlaceholder: "Key name (e.g. Claude Desktop)",
+    keyCreated: "API key created successfully!",
+    keyWarning: "Copy this key now — it will not be shown again.",
+    createError: "Error creating the key.",
+    confirmDelete: "Delete this API key? Connected clients will lose access.",
+    noKeys: "You don't have any API keys yet. Create one to connect AI assistants.",
+    created: "Created",
+    lastUsed: "Last used",
+    mcpTitle: "MCP Configuration",
+    mcpDescription: "Add this to your AI assistant's MCP settings (e.g. Claude Desktop):",
   },
 
   sites: {

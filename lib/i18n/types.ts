@@ -102,8 +102,27 @@ export interface Dictionary {
     nav: {
       dashboard: string;
       mySites: string;
+      apiKeys: string;
     };
     signOut: string;
+  };
+
+  // API Keys
+  apiKeys: {
+    title: string;
+    subtitle: string;
+    createButton: string;
+    createTitle: string;
+    namePlaceholder: string;
+    keyCreated: string;
+    keyWarning: string;
+    createError: string;
+    confirmDelete: string;
+    noKeys: string;
+    created: string;
+    lastUsed: string;
+    mcpTitle: string;
+    mcpDescription: string;
   };
 
   // Sites list

@@ -95,8 +95,26 @@ const de: Dictionary = {
     nav: {
       dashboard: "Dashboard",
       mySites: "Meine Websites",
+      apiKeys: "API-Schlüssel",
     },
     signOut: "Abmelden",
+  },
+
+  apiKeys: {
+    title: "MCP API-Schlüssel",
+    subtitle: "Verwalten Sie Ihre API-Schlüssel, um KI-Assistenten über das MCP-Protokoll zu verbinden",
+    createButton: "+ Neuer Schlüssel",
+    createTitle: "Neuen API-Schlüssel erstellen",
+    namePlaceholder: "Schlüsselname (z.B. Claude Desktop)",
+    keyCreated: "API-Schlüssel erfolgreich erstellt!",
+    keyWarning: "Kopieren Sie diesen Schlüssel jetzt — er wird nicht erneut angezeigt.",
+    createError: "Fehler beim Erstellen des Schlüssels.",
+    confirmDelete: "Diesen API-Schlüssel löschen? Verbundene Clients verlieren den Zugriff.",
+    noKeys: "Sie haben noch keine API-Schlüssel. Erstellen Sie einen, um KI-Assistenten zu verbinden.",
+    created: "Erstellt am",
+    lastUsed: "Zuletzt verwendet",
+    mcpTitle: "MCP-Konfiguration",
+    mcpDescription: "Fügen Sie dies den MCP-Einstellungen Ihres KI-Assistenten hinzu (z.B. Claude Desktop):",
   },
 
   sites: {

@@ -43,6 +43,39 @@ services:
         constraints:
           - node.labels.gpu != true
 
+  # MCP Server — Streamable HTTP MCP server protégé par clé API
+  ai-friendly-mcp:
+    image: registry.methodinfo.fr/ai-friendly-mcp:latest
+    build:
+      context: ..
+      dockerfile: mcp-server/Dockerfile
+    environment:
+      - DB_CONNECTION_STRING=${DB_CONNECTION_STRING}
+      - MCP_PORT=3001
+    networks:
+      - proxy
+    deploy:
+      replicas: 1
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.services.ai-friendly-mcp.loadbalancer.server.port=3001"
+        # Router HTTPS pour le sous-domaine MCP
+        - "traefik.http.routers.ai-friendly-mcp.rule=Host(`mcp.${TRAEFIK_HOST}`)"
+        - "traefik.http.routers.ai-friendly-mcp.entrypoints=websecure"
+        - "traefik.http.routers.ai-friendly-mcp.tls.certresolver=letsencrypt"
+        - "traefik.http.routers.ai-friendly-mcp.service=ai-friendly-mcp"
+        # Router HTTP (redirection vers HTTPS)
+        - "traefik.http.routers.ai-friendly-mcp-http.rule=Host(`mcp.${TRAEFIK_HOST}`)"
+        - "traefik.http.routers.ai-friendly-mcp-http.entrypoints=web"
+        - "traefik.http.routers.ai-friendly-mcp-http.middlewares=redirect-to-https@file"
+        - "traefik.http.routers.ai-friendly-mcp-http.service=noop@internal"
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+      placement:
+        constraints:
+          - node.labels.gpu != true
+
   # Worker — analyses programmées et nettoyage automatique (60 jours)
   ai-friendly-worker:
     image: registry.methodinfo.fr/ai-friendly-worker:latest
