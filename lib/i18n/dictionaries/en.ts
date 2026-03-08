@@ -36,30 +36,74 @@ const en: Dictionary = {
   },
 
   home: {
-    subtitle: "Check if your site is readable and optimized for AI",
+    subtitle: "The monitoring platform built for vibe coders",
     dashboardLink: "My dashboard",
-    articleTitle: "Analyze your website's AI readability",
-    articleP1:
-      "AI Friendly is a free tool that evaluates whether your site is optimized for artificial intelligence engines and assistants like ChatGPT, Claude, Gemini and other LLMs. Enter a URL below to get a readability score out of 10, personalized recommendations and a preview of what an AI sees.",
-    articleP2:
-      "Our analysis checks metadata (title, description, Open Graph, Schema.org), content structure (semantic tags, heading hierarchy) and bot accessibility (robots.txt, sitemap, llms.txt).",
+    // Hero
+    heroHeadline: "Stop shipping blind. Monitor everything.",
+    heroSubheadline: "Availability, security, AI accessibility — one platform runs all your external tests in real time. Your AI agents auto-fix issues via MCP.",
+    heroCta: "Try it free",
+    heroSecondaryCta: "See how it works",
+    // Analyze form
     urlPlaceholder: "https://example.com",
     urlLabel: "URL to analyze",
     analyzeButton: "Analyze",
     analyzingButton: "Analyzing…",
     emptyUrlError: "Please enter a URL.",
     analyzeError: "Error during analysis.",
+    // Results
     resultsHeading: "Analysis Results",
     scoreTitle: "AI Readability Score",
     improvementsTitle: "Improvements needed",
-    improvementsSubtitle:
-      "These changes will improve AI readability",
+    improvementsSubtitle: "These changes will improve AI readability",
     aiPreviewTitle: "AI Preview",
-    aiPreviewSubtitle:
-      "What an assistant like ChatGPT would see — structured representation",
-    footerTool: "Readability analysis tool for artificial intelligence",
-    footerSeo:
-      "Optimize your site for ChatGPT, Claude, Gemini and other AI assistants. Improve your visibility in LLM-generated responses.",
+    aiPreviewSubtitle: "What an assistant like ChatGPT would see — structured representation",
+    // Problem section
+    problemTitle: "You're flying blind",
+    problemSubtitle: "Traditional monitoring is broken for modern developers",
+    problemCards: [
+      { icon: "calendar", title: "Annual pentests", description: "Security audits once a year? Your app changes every week." },
+      { icon: "clock", title: "Late detection", description: "You discover slowdowns after your users do. Not before." },
+      { icon: "eye-off", title: "SEO regressions", description: "Broken meta tags, missing sitemaps — weeks before anyone notices." },
+      { icon: "puzzle", title: "Tool sprawl", description: "Uptime robot + security scanner + SEO checker = 5 dashboards, no overview." },
+    ],
+    // Features section
+    featuresTitle: "One platform. Every external test.",
+    featuresSubtitle: "Continuous monitoring that actually fits how you ship",
+    features: [
+      { icon: "signal", title: "Availability monitoring", description: "HTTP checks, response time, SSL validation — every minute. Get alerted before your users notice." },
+      { icon: "shield", title: "OWASP security scans", description: "Headers, cookies, SSL/TLS, info leaks, injection vectors — scanned every hour. Not once a year." },
+      { icon: "bot", title: "AI accessibility", description: "Is your site readable by ChatGPT, Claude, Gemini? Score out of 10 with actionable recommendations." },
+      { icon: "history", title: "Score history & trends", description: "Track every metric over 60 days. Spot regressions instantly. No more surprises." },
+    ],
+    // MCP section
+    mcpTitle: "Your AI agents fix issues automatically",
+    mcpSubtitle: "Built-in MCP server for agentic workflows",
+    mcpDescription: "Connect Claude, Cursor, or any MCP-compatible agent. They fetch test results, detect regressions, and push fixes — without you lifting a finger.",
+    mcpFeatures: [
+      "Run any test on demand via MCP",
+      "Fetch latest results programmatically",
+      "Agents auto-detect and fix regressions",
+      "API key auth — one key per agent",
+    ],
+    mcpCodeComment: "// In your AI assistant's MCP config",
+    // How it works
+    howTitle: "Up and running in 3 minutes",
+    howSteps: [
+      { step: "01", title: "Add your site", description: "Enter a URL and pick your monitoring frequency. That's it." },
+      { step: "02", title: "Tests run automatically", description: "Availability every minute, security every hour, AI readability on your schedule." },
+      { step: "03", title: "Get scores & alerts", description: "Dashboard with trends, history, and detailed breakdowns. Connect MCP for auto-fixes." },
+    ],
+    // CTA
+    ctaTitle: "Stop guessing. Start monitoring.",
+    ctaSubtitle: "Free to start. No credit card required.",
+    ctaButton: "Create your free account",
+    // Footer
+    footerTool: "The monitoring platform for vibe coders",
+    footerSeo: "Availability, security, AI accessibility — continuous external testing for modern developers. With built-in MCP for agentic auto-fixes.",
+    footerLinks: [
+      { label: "Dashboard", href: "/dashboard" },
+      { label: "Sign in", href: "/auth/signin" },
+    ],
   },
 
   auth: {

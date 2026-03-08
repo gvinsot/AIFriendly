@@ -49,23 +49,50 @@ export interface Dictionary {
   home: {
     subtitle: string;
     dashboardLink: string;
-    articleTitle: string;
-    articleP1: string;
-    articleP2: string;
+    // Hero
+    heroHeadline: string;
+    heroSubheadline: string;
+    heroCta: string;
+    heroSecondaryCta: string;
+    // Analyze form
     urlPlaceholder: string;
     urlLabel: string;
     analyzeButton: string;
     analyzingButton: string;
     emptyUrlError: string;
     analyzeError: string;
+    // Results
     resultsHeading: string;
     scoreTitle: string;
     improvementsTitle: string;
     improvementsSubtitle: string;
     aiPreviewTitle: string;
     aiPreviewSubtitle: string;
+    // Problem section
+    problemTitle: string;
+    problemSubtitle: string;
+    problemCards: { icon: string; title: string; description: string }[];
+    // Features section
+    featuresTitle: string;
+    featuresSubtitle: string;
+    features: { icon: string; title: string; description: string }[];
+    // MCP section
+    mcpTitle: string;
+    mcpSubtitle: string;
+    mcpDescription: string;
+    mcpFeatures: string[];
+    mcpCodeComment: string;
+    // How it works
+    howTitle: string;
+    howSteps: { step: string; title: string; description: string }[];
+    // CTA
+    ctaTitle: string;
+    ctaSubtitle: string;
+    ctaButton: string;
+    // Footer
     footerTool: string;
     footerSeo: string;
+    footerLinks: { label: string; href: string }[];
   };
 
   // Auth

@@ -36,31 +36,74 @@ const fr: Dictionary = {
   },
 
   home: {
-    subtitle: "Vérifiez si votre site est lisible et optimisé pour l'IA",
+    subtitle: "La plateforme de monitoring faite pour les vibe coders",
     dashboardLink: "Mon espace",
-    articleTitle: "Analysez la lisibilité IA de votre site web",
-    articleP1:
-      "AI Friendly est un outil gratuit qui évalue si votre site est optimisé pour les moteurs et assistants d'intelligence artificielle comme ChatGPT, Claude, Gemini et autres LLMs. Entrez une URL ci-dessous pour obtenir un score de lisibilité sur 10, des recommandations personnalisées et un aperçu de ce que voit une IA.",
-    articleP2:
-      "Notre analyse vérifie les métadonnées (title, description, Open Graph, Schema.org), la structure du contenu (balises sémantiques, hiérarchie des titres) et l'accessibilité aux bots (robots.txt, sitemap, llms.txt).",
+    // Hero
+    heroHeadline: "Arrêtez de shipper à l'aveugle. Monitorez tout.",
+    heroSubheadline: "Disponibilité, sécurité, accessibilité IA — une seule plateforme exécute tous vos tests externes en temps réel. Vos agents IA corrigent automatiquement via MCP.",
+    heroCta: "Essayer gratuitement",
+    heroSecondaryCta: "Voir comment ça marche",
+    // Analyze form
     urlPlaceholder: "https://exemple.com",
     urlLabel: "URL à analyser",
     analyzeButton: "Analyser",
     analyzingButton: "Analyse…",
     emptyUrlError: "Veuillez saisir une URL.",
     analyzeError: "Erreur lors de l'analyse.",
+    // Results
     resultsHeading: "Résultats de l'analyse",
     scoreTitle: "Score de lisibilité IA",
     improvementsTitle: "Éléments à améliorer",
-    improvementsSubtitle:
-      "Ces modifications amélioreront la lisibilité pour les IA",
+    improvementsSubtitle: "Ces modifications amélioreront la lisibilité pour les IA",
     aiPreviewTitle: "Aperçu IA",
-    aiPreviewSubtitle:
-      "Ce que verrait un assistant comme ChatGPT — représentation structurée",
-    footerTool:
-      "Outil d'analyse de lisibilité pour l'intelligence artificielle",
-    footerSeo:
-      "Optimisez votre site pour ChatGPT, Claude, Gemini et les autres assistants IA. Améliorez votre visibilité dans les réponses générées par les LLMs.",
+    aiPreviewSubtitle: "Ce que verrait un assistant comme ChatGPT — représentation structurée",
+    // Problem section
+    problemTitle: "Vous naviguez à l'aveugle",
+    problemSubtitle: "Le monitoring traditionnel est cassé pour les développeurs modernes",
+    problemCards: [
+      { icon: "calendar", title: "Pentests annuels", description: "Des audits de sécurité une fois par an ? Votre app change chaque semaine." },
+      { icon: "clock", title: "Détection tardive", description: "Vous découvrez les ralentissements après vos utilisateurs. Pas avant." },
+      { icon: "eye-off", title: "Régressions SEO", description: "Meta tags cassés, sitemaps manquants — des semaines avant que quelqu'un ne remarque." },
+      { icon: "puzzle", title: "Multiplication des outils", description: "Uptime robot + scanner sécu + vérificateur SEO = 5 dashboards, aucune vue d'ensemble." },
+    ],
+    // Features section
+    featuresTitle: "Une plateforme. Tous les tests externes.",
+    featuresSubtitle: "Un monitoring continu qui colle à votre façon de shipper",
+    features: [
+      { icon: "signal", title: "Monitoring de disponibilité", description: "Checks HTTP, temps de réponse, validation SSL — chaque minute. Soyez alerté avant vos utilisateurs." },
+      { icon: "shield", title: "Scans de sécurité OWASP", description: "Headers, cookies, SSL/TLS, fuites d'info, vecteurs d'injection — scannés chaque heure. Pas une fois par an." },
+      { icon: "bot", title: "Accessibilité IA", description: "Votre site est-il lisible par ChatGPT, Claude, Gemini ? Score sur 10 avec des recommandations actionnables." },
+      { icon: "history", title: "Historique & tendances", description: "Suivez chaque métrique sur 60 jours. Repérez les régressions instantanément. Plus de mauvaises surprises." },
+    ],
+    // MCP section
+    mcpTitle: "Vos agents IA corrigent automatiquement",
+    mcpSubtitle: "Serveur MCP intégré pour les workflows agentiques",
+    mcpDescription: "Connectez Claude, Cursor ou tout agent compatible MCP. Ils récupèrent les résultats, détectent les régressions et poussent les corrections — sans lever le petit doigt.",
+    mcpFeatures: [
+      "Lancez n'importe quel test à la demande via MCP",
+      "Récupérez les derniers résultats programmatiquement",
+      "Les agents détectent et corrigent automatiquement les régressions",
+      "Auth par clé API — une clé par agent",
+    ],
+    mcpCodeComment: "// Dans la config MCP de votre assistant IA",
+    // How it works
+    howTitle: "Opérationnel en 3 minutes",
+    howSteps: [
+      { step: "01", title: "Ajoutez votre site", description: "Entrez une URL et choisissez votre fréquence de monitoring. C'est tout." },
+      { step: "02", title: "Les tests tournent automatiquement", description: "Disponibilité chaque minute, sécurité chaque heure, accessibilité IA selon votre planning." },
+      { step: "03", title: "Obtenez scores & alertes", description: "Dashboard avec tendances, historique et détails complets. Connectez MCP pour l'auto-correction." },
+    ],
+    // CTA
+    ctaTitle: "Arrêtez de deviner. Commencez à monitorer.",
+    ctaSubtitle: "Gratuit pour commencer. Pas de carte bancaire requise.",
+    ctaButton: "Créer votre compte gratuit",
+    // Footer
+    footerTool: "La plateforme de monitoring pour les vibe coders",
+    footerSeo: "Disponibilité, sécurité, accessibilité IA — tests externes continus pour les développeurs modernes. Avec MCP intégré pour les corrections automatiques.",
+    footerLinks: [
+      { label: "Dashboard", href: "/dashboard" },
+      { label: "Connexion", href: "/auth/signin" },
+    ],
   },
 
   auth: {

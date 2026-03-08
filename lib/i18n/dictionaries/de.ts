@@ -36,30 +36,74 @@ const de: Dictionary = {
   },
 
   home: {
-    subtitle: "Prüfen Sie, ob Ihre Website lesbar und für KI optimiert ist",
+    subtitle: "Die Monitoring-Plattform für Vibe Coders",
     dashboardLink: "Mein Bereich",
-    articleTitle: "Analysieren Sie die KI-Lesbarkeit Ihrer Website",
-    articleP1:
-      "AI Friendly ist ein kostenloses Tool, das bewertet, ob Ihre Website für KI-Suchmaschinen und Assistenten wie ChatGPT, Claude, Gemini und andere LLMs optimiert ist. Geben Sie unten eine URL ein, um eine Lesbarkeitsbewertung von 10, personalisierte Empfehlungen und eine Vorschau dessen zu erhalten, was eine KI sieht.",
-    articleP2:
-      "Unsere Analyse überprüft Metadaten (Title, Description, Open Graph, Schema.org), Inhaltsstruktur (semantische Tags, Überschriftenhierarchie) und Bot-Zugänglichkeit (robots.txt, Sitemap, llms.txt).",
+    // Hero
+    heroHeadline: "Schluss mit blindem Deployment. Alles überwachen.",
+    heroSubheadline: "Verfügbarkeit, Sicherheit, KI-Zugänglichkeit — eine Plattform führt alle externen Tests in Echtzeit durch. Ihre KI-Agenten beheben Probleme automatisch via MCP.",
+    heroCta: "Kostenlos testen",
+    heroSecondaryCta: "So funktioniert's",
+    // Analyze form
     urlPlaceholder: "https://beispiel.de",
     urlLabel: "Zu analysierende URL",
     analyzeButton: "Analysieren",
     analyzingButton: "Analyse läuft…",
     emptyUrlError: "Bitte geben Sie eine URL ein.",
     analyzeError: "Fehler bei der Analyse.",
+    // Results
     resultsHeading: "Analyseergebnisse",
     scoreTitle: "KI-Lesbarkeitsbewertung",
     improvementsTitle: "Verbesserungsbedarf",
-    improvementsSubtitle:
-      "Diese Änderungen verbessern die KI-Lesbarkeit",
+    improvementsSubtitle: "Diese Änderungen verbessern die KI-Lesbarkeit",
     aiPreviewTitle: "KI-Vorschau",
-    aiPreviewSubtitle:
-      "Was ein Assistent wie ChatGPT sehen würde — strukturierte Darstellung",
-    footerTool: "Lesbarkeitsanalyse-Tool für künstliche Intelligenz",
-    footerSeo:
-      "Optimieren Sie Ihre Website für ChatGPT, Claude, Gemini und andere KI-Assistenten. Verbessern Sie Ihre Sichtbarkeit in LLM-generierten Antworten.",
+    aiPreviewSubtitle: "Was ein Assistent wie ChatGPT sehen würde — strukturierte Darstellung",
+    // Problem section
+    problemTitle: "Sie fliegen blind",
+    problemSubtitle: "Traditionelles Monitoring funktioniert nicht für moderne Entwickler",
+    problemCards: [
+      { icon: "calendar", title: "Jährliche Pentests", description: "Sicherheitsaudits einmal im Jahr? Ihre App ändert sich jede Woche." },
+      { icon: "clock", title: "Späte Erkennung", description: "Sie entdecken Verlangsamungen nach Ihren Nutzern. Nicht davor." },
+      { icon: "eye-off", title: "SEO-Regressionen", description: "Kaputte Meta-Tags, fehlende Sitemaps — Wochen bevor jemand es bemerkt." },
+      { icon: "puzzle", title: "Tool-Wildwuchs", description: "Uptime Robot + Sicherheitsscanner + SEO-Checker = 5 Dashboards, kein Überblick." },
+    ],
+    // Features section
+    featuresTitle: "Eine Plattform. Alle externen Tests.",
+    featuresSubtitle: "Kontinuierliches Monitoring, das zu Ihrem Workflow passt",
+    features: [
+      { icon: "signal", title: "Verfügbarkeitsmonitoring", description: "HTTP-Checks, Antwortzeit, SSL-Validierung — jede Minute. Alarmiert vor Ihren Nutzern." },
+      { icon: "shield", title: "OWASP-Sicherheitsscans", description: "Headers, Cookies, SSL/TLS, Infoleaks, Injection-Vektoren — stündlich gescannt. Nicht einmal im Jahr." },
+      { icon: "bot", title: "KI-Zugänglichkeit", description: "Ist Ihre Website für ChatGPT, Claude, Gemini lesbar? Bewertung von 10 mit umsetzbaren Empfehlungen." },
+      { icon: "history", title: "Verlauf & Trends", description: "Jede Metrik über 60 Tage verfolgen. Regressionen sofort erkennen. Keine Überraschungen mehr." },
+    ],
+    // MCP section
+    mcpTitle: "Ihre KI-Agenten beheben Probleme automatisch",
+    mcpSubtitle: "Integrierter MCP-Server für agentische Workflows",
+    mcpDescription: "Verbinden Sie Claude, Cursor oder jeden MCP-kompatiblen Agenten. Sie holen Ergebnisse, erkennen Regressionen und pushen Fixes — ohne Ihr Zutun.",
+    mcpFeatures: [
+      "Jeden Test on-demand via MCP ausführen",
+      "Neueste Ergebnisse programmatisch abrufen",
+      "Agenten erkennen und beheben Regressionen automatisch",
+      "API-Key-Auth — ein Schlüssel pro Agent",
+    ],
+    mcpCodeComment: "// In der MCP-Konfiguration Ihres KI-Assistenten",
+    // How it works
+    howTitle: "In 3 Minuten einsatzbereit",
+    howSteps: [
+      { step: "01", title: "Website hinzufügen", description: "URL eingeben und Monitoring-Frequenz wählen. Das war's." },
+      { step: "02", title: "Tests laufen automatisch", description: "Verfügbarkeit jede Minute, Sicherheit jede Stunde, KI-Zugänglichkeit nach Ihrem Plan." },
+      { step: "03", title: "Bewertungen & Alerts erhalten", description: "Dashboard mit Trends, Verlauf und detaillierten Aufschlüsselungen. MCP für Auto-Fixes verbinden." },
+    ],
+    // CTA
+    ctaTitle: "Schluss mit Raten. Anfangen zu überwachen.",
+    ctaSubtitle: "Kostenlos starten. Keine Kreditkarte erforderlich.",
+    ctaButton: "Kostenloses Konto erstellen",
+    // Footer
+    footerTool: "Die Monitoring-Plattform für Vibe Coders",
+    footerSeo: "Verfügbarkeit, Sicherheit, KI-Zugänglichkeit — kontinuierliche externe Tests für moderne Entwickler. Mit integriertem MCP für automatische Korrekturen.",
+    footerLinks: [
+      { label: "Dashboard", href: "/dashboard" },
+      { label: "Anmelden", href: "/auth/signin" },
+    ],
   },
 
   auth: {
