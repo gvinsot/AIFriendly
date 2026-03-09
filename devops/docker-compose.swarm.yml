@@ -93,7 +93,7 @@ services:
         delay: 30s
       placement:
         constraints:
-          - node.labels.gpu != true
+          - node.labels.gpu == none
 
 networks:
   proxy:
