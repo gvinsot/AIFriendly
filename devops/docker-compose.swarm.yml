@@ -41,7 +41,7 @@ services:
         condition: on-failure
       placement:
         constraints:
-          - node.labels.gpu != true
+          - node.labels.gpu == none
 
   # MCP Server — Streamable HTTP MCP server protégé par clé API
   ai-friendly-mcp:
