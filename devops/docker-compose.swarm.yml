@@ -21,6 +21,7 @@ services:
       - MICROSOFT_CLIENT_SECRET=${MICROSOFT_CLIENT_SECRET}
     networks:
       - proxy
+      - postgresqlcluster_internal
     deploy:
       replicas: 1
       labels:
@@ -86,6 +87,7 @@ services:
       - DB_CONNECTION_STRING=${DB_CONNECTION_STRING}
     networks:
       - proxy
+      - postgresqlcluster_internal
     deploy:
       replicas: 1
       restart_policy:
@@ -97,4 +99,6 @@ services:
 
 networks:
   proxy:
+    external: true
+  postgresqlcluster_internal:
     external: true
