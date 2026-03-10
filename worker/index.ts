@@ -14,6 +14,7 @@ import * as cheerio from "cheerio";
 
 const prisma = new PrismaClient();
 
+
 const AI_CHECK_INTERVAL_MS = 5 * 60 * 1000;       // 5 minutes
 const AVAILABILITY_INTERVAL_MS = 60 * 1000;        // 1 minute
 const SECURITY_INTERVAL_MS = 60 * 60 * 1000;       // 1 hour
