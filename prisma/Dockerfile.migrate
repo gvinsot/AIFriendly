@@ -9,11 +9,9 @@ WORKDIR /app
 # Install Prisma CLI
 RUN npm install -g prisma@6
 
-# Copy Prisma schema
+# Copy Prisma schema and migrations
 COPY schema.prisma ./prisma/schema.prisma
-
-# Copy migrations if they exist (use . to avoid failure if missing)
-COPY migration[s] ./prisma/migrations
+COPY migrations ./prisma/migrations
 
 WORKDIR /app/prisma
 
