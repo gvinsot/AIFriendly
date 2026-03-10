@@ -556,6 +556,26 @@ app.delete("/mcp", (_req, res) => {
   });
 });
 
+// Health check endpoint
+app.get("/health", async (_req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.status(200).json({ status: "ok", db: "connected" });
+  } catch (error) {
+    console.error("[HEALTH] Database connection failed:", error);
+    res.status(503).json({ status: "error", db: "disconnected" });
+  }
+});
+
+// Global error handlers
+process.on("uncaughtException", (error) => {
+  console.error("[FATAL] Uncaught exception:", error);
+});
+
+process.on("unhandledRejection", (reason) => {
+  console.error("[FATAL] Unhandled rejection:", reason);
+});
+
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`AI Friendly MCP Server running on port ${PORT}`);
   console.log("Waiting for connections...");
