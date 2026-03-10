@@ -473,7 +473,7 @@ Représentation structurée comprenant :
 
 | Variable | Description |
 |----------|-------------|
-| `DB_CONNECTION_STRING` | URL PostgreSQL |
+| `DATABASE_URL` | URL PostgreSQL |
 | `NEXTAUTH_SECRET` | Secret NextAuth |
 | `NEXTAUTH_URL` | URL publique (https://aifriendly.eu) |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | OAuth Google |
@@ -485,7 +485,7 @@ Représentation structurée comprenant :
 - Réseau `proxy` (externe, partagé avec Traefik)
 - 1 replica par service
 - Restart policy : `on-failure` (worker avec délai 30s)
-- Contrainte placement : `node.labels.gpu != true`
+- Contrainte placement : `node.labels.gpu == none`
 
 ### 10.3 Traefik
 

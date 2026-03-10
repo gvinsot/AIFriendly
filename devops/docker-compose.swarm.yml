@@ -76,7 +76,7 @@ services:
         delay: 10s
       placement:
         constraints:
-          - node.labels.gpu != true
+          - node.labels.gpu == none
 
   # Worker — analyses programmées et nettoyage automatique (60 jours)
   ai-friendly-worker:
