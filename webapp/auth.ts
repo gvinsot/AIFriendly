@@ -17,7 +17,13 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     MicrosoftEntraId({
       clientId: process.env.MICROSOFT_CLIENT_ID!,
       clientSecret: process.env.MICROSOFT_CLIENT_SECRET!,
-      issuer: "https://login.microsoftonline.com/consumers/v2.0",
+      // Microsoft consumers tenant ID (personal accounts)
+      issuer: "https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0",
+      authorization: {
+        params: {
+          scope: "openid profile email User.Read",
+        },
+      },
     }),
   ],
   pages: {
