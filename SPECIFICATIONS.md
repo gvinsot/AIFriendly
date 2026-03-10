@@ -473,7 +473,7 @@ Représentation structurée comprenant :
 
 | Variable | Description |
 |----------|-------------|
-| `DATABASE_URL` | URL PostgreSQL |
+| `DB_CONNECTION_STRING` | URL PostgreSQL |
 | `NEXTAUTH_SECRET` | Secret NextAuth |
 | `NEXTAUTH_URL` | URL publique (https://aifriendly.eu) |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | OAuth Google |
