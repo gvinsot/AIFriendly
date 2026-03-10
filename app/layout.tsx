@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Cormorant_Garamond, DM_Sans, JetBrains_Mono } from "next/font/google";
 import Script from "next/script";
+import { I18nProvider } from "@/lib/i18n/context";
 import "./globals.css";
 
 const cormorant = Cormorant_Garamond({
@@ -20,35 +21,35 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AI Friendly — Vérifiez si votre site est lisible par l'IA",
+  title: "AI Friendly — Check if your site is AI-readable",
   description:
-    "Analysez n'importe quelle URL pour savoir si elle est optimisée pour les moteurs et assistants IA (ChatGPT, etc.). Score, recommandations et aperçu IA.",
+    "Analyze any URL to see if it's optimized for AI engines and assistants (ChatGPT, etc.). Score, recommendations and AI preview.",
   openGraph: {
-    title: "AI Friendly — Vérifiez si votre site est lisible par l'IA",
+    title: "AI Friendly — Check if your site is AI-readable",
     description:
-      "Analysez n'importe quelle URL pour savoir si elle est optimisée pour les moteurs et assistants IA (ChatGPT, etc.). Score, recommandations et aperçu IA.",
+      "Analyze any URL to see if it's optimized for AI engines and assistants (ChatGPT, etc.). Score, recommendations and AI preview.",
     type: "website",
-    url: "https://aifriendly.fr",
+    url: "https://aifriendly.eu",
     siteName: "AI Friendly",
-    locale: "fr_FR",
+    locale: "en_US",
     images: [
       {
-        url: "https://aifriendly.fr/og-image.png",
+        url: "https://aifriendly.eu/og-image.png",
         width: 1200,
         height: 630,
-        alt: "AI Friendly - Analysez la lisibilité IA de votre site",
+        alt: "AI Friendly - Analyze your site's AI readability",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "AI Friendly — Vérifiez si votre site est lisible par l'IA",
+    title: "AI Friendly — Check if your site is AI-readable",
     description:
-      "Analysez n'importe quelle URL pour savoir si elle est optimisée pour les moteurs et assistants IA.",
-    images: ["https://aifriendly.fr/og-image.png"],
+      "Analyze any URL to see if it's optimized for AI engines and assistants.",
+    images: ["https://aifriendly.eu/og-image.png"],
   },
   alternates: {
-    canonical: "https://aifriendly.fr",
+    canonical: "https://aifriendly.eu",
   },
 };
 
@@ -58,16 +59,18 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="fr" className={`scroll-smooth ${cormorant.variable} ${dmSans.variable} ${jetbrainsMono.variable}`}>
+    <html lang="en" className={`scroll-smooth ${cormorant.variable} ${dmSans.variable} ${jetbrainsMono.variable}`}>
       <body className="font-sans antialiased min-h-screen bg-luxe-bg text-luxe-fg">
-        {children}
-        
+        <I18nProvider>
+          {children}
+        </I18nProvider>
+
         {/* Matomo Analytics */}
         <Script id="matomo" strategy="afterInteractive">
           {`
             var _paq = window._paq = window._paq || [];
             _paq.push(["setDocumentTitle", document.domain + "/" + document.title]);
-            _paq.push(["setCookieDomain", "*.aifriendly.fr"]);
+            _paq.push(["setCookieDomain", "*.aifriendly.eu"]);
             _paq.push(['trackPageView']);
             _paq.push(['enableLinkTracking']);
             (function() {
@@ -81,11 +84,11 @@ export default function RootLayout({
         </Script>
         <noscript>
           <p>
-            <img 
-              referrerPolicy="no-referrer-when-downgrade" 
-              src="https://stats.methodinfo.fr/matomo.php?idsite=2&amp;rec=1" 
-              style={{border: 0}} 
-              alt="" 
+            <img
+              referrerPolicy="no-referrer-when-downgrade"
+              src="https://stats.methodinfo.fr/matomo.php?idsite=2&amp;rec=1"
+              style={{border: 0}}
+              alt=""
             />
           </p>
         </noscript>

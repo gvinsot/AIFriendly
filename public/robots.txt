@@ -1,11 +1,11 @@
 # Robots.txt pour AI Friendly
-# https://aifriendly.fr
+# https://aifriendly.eu
 
 User-agent: *
 Allow: /
 
 # Sitemap
-Sitemap: https://aifriendly.fr/sitemap.xml
+Sitemap: https://aifriendly.eu/sitemap.xml
 
 # Fichier d'instructions pour les LLMs
 # Voir https://llmstxt.org/
