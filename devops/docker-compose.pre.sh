@@ -11,6 +11,17 @@ if [ -f .env ]; then
   set +a
   echo "Variables chargées depuis .env (TRAEFIK_HOST=${TRAEFIK_HOST:-non défini})"
 fi
+
+# ═══════════════════════════════════════════════════════════════
+# MIGRATIONS PRISMA
+# ═══════════════════════════════════════════════════════════════
+# Les migrations doivent être créées en local avant le build:
+#   npx prisma migrate dev --name <description>
+#
+# Le service ai-friendly-migrate applique automatiquement les
+# migrations au déploiement. Il s'exécute une fois puis s'arrête.
+# ═══════════════════════════════════════════════════════════════
+
 # Optionnel : build et push de l'image vers la registry
 # docker compose -f docker-compose.swarm.yml build
 # docker compose -f docker-compose.swarm.yml push
