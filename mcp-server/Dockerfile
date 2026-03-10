@@ -14,9 +14,9 @@ COPY prisma/schema.prisma ./prisma/schema.prisma
 RUN npx prisma generate --schema=./prisma/schema.prisma
 
 # Copy shared lib files (analyzers)
-COPY lib/analyzer.ts ./lib/analyzer.ts
-COPY lib/availability-checker.ts ./lib/availability-checker.ts
-COPY lib/security-scanner.ts ./lib/security-scanner.ts
+COPY webapp/lib/analyzer.ts ./lib/analyzer.ts
+COPY webapp/lib/availability-checker.ts ./lib/availability-checker.ts
+COPY webapp/lib/security-scanner.ts ./lib/security-scanner.ts
 
 # Copy MCP server source
 COPY mcp-server/index.ts ./index.ts

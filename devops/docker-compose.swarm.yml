@@ -10,7 +10,7 @@ services:
     image: registry.methodinfo.fr/ai-friendly:latest
     build:
       context: ..
-      dockerfile: Dockerfile
+      dockerfile: webapp/Dockerfile
     environment:
       - DB_CONNECTION_STRING=${DB_CONNECTION_STRING}
       - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}

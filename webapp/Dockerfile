@@ -1,5 +1,5 @@
 # IA Friendly - Dockerfile optimisé multi-stage
-# Build: docker build -t ia-friendly:latest .
+# Build: from repo root with docker build -f webapp/Dockerfile .
 # Run:   docker run -p 3000:3000 ia-friendly:latest
 
 FROM node:20-alpine AS base
@@ -7,7 +7,7 @@ FROM node:20-alpine AS base
 # Étape 1: installer les dépendances (cache séparé)
 FROM base AS deps
 WORKDIR /app
-COPY package.json package-lock.json* ./
+COPY webapp/package.json webapp/package-lock.json* ./
 COPY prisma/schema.prisma ./prisma/schema.prisma
 RUN npm ci
 RUN npx prisma generate
@@ -16,7 +16,8 @@ RUN npx prisma generate
 FROM base AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
-COPY . .
+COPY webapp/ .
+COPY prisma/schema.prisma ./prisma/schema.prisma
 RUN mkdir -p public
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
