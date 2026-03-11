@@ -8,9 +8,9 @@ FROM node:20-alpine AS base
 FROM base AS deps
 WORKDIR /app
 COPY webapp/package.json webapp/package-lock.json ./
-RUN npm ci
 RUN mkdir -p prisma
 COPY prisma/schema.prisma ./prisma/schema.prisma
+RUN npm ci
 RUN npx prisma generate
 
 # Étape 2: build Next.js (standalone)
