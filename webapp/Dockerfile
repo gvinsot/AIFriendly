@@ -8,8 +8,9 @@ FROM node:20-alpine AS base
 FROM base AS deps
 WORKDIR /app
 COPY webapp/package.json webapp/package-lock.json* ./
-COPY prisma/schema.prisma ./prisma/schema.prisma
 RUN npm ci
+RUN mkdir -p prisma
+COPY prisma/schema.prisma ./prisma/schema.prisma
 RUN npx prisma generate
 
 # Étape 2: build Next.js (standalone)
@@ -27,7 +28,7 @@ FROM base AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN addgroup --system --gid 1001 nodejs && \
+RUN addgroup --system --gid 1001 nodejs && \\
     adduser --system --uid 1001 nextjs
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
