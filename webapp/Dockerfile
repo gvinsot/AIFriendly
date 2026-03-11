@@ -7,7 +7,7 @@ FROM node:20-alpine AS base
 # Étape 1: installer les dépendances (cache séparé)
 FROM base AS deps
 WORKDIR /app
-COPY webapp/package.json webapp/package-lock.json* ./
+COPY webapp/package.json webapp/package-lock.json ./
 RUN npm ci
 RUN mkdir -p prisma
 COPY prisma/schema.prisma ./prisma/schema.prisma
