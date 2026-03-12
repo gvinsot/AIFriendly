@@ -1,4 +1,4 @@
-"use client";
+use client";
 
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useSearchParams } from "next/navigation";
@@ -676,8 +676,6 @@ function SecurityTab({ scans, selectedScan, scanning, loadingDetail, onScan, onV
           <MiniStat label={t.siteDetail.security.injection} value={<ScoreBadge score={scans[0].injectionScore} size="sm" />} />
         </div>
       )}
-
-      <ScoreChart entries={scans.map(s => ({ id: s.id, score: s.score, createdAt: s.createdAt }))} onClickEntry={onViewDetail} title={t.siteDetail.security.scoreTrend} />
 
       {scans.length > 0 && (
         <LineChart
