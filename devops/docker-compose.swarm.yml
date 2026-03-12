@@ -24,6 +24,9 @@ services:
       - postgresqlcluster_internal
     deploy:
       replicas: 1
+      update_config:
+        parallelism: 1
+        order: stop-first
       labels:
         - "traefik.enable=true"
         - "traefik.http.services.ai-friendly.loadbalancer.server.port=3000"
@@ -70,6 +73,9 @@ services:
       start_period: 10s
     deploy:
       replicas: 1
+      update_config:
+        parallelism: 1
+        order: stop-first
       labels:
         - "traefik.enable=true"
         - "traefik.http.services.ai-friendly-mcp.loadbalancer.server.port=3001"
@@ -103,6 +109,9 @@ services:
       - postgresqlcluster_internal
     deploy:
       replicas: 1
+      update_config:
+        parallelism: 1
+        order: stop-first
       restart_policy:
         condition: on-failure
         delay: 30s
@@ -123,6 +132,9 @@ services:
     deploy:
       mode: replicated
       replicas: 1
+      update_config:
+        parallelism: 1
+        order: stop-first
       restart_policy:
         condition: none
       placement:
