@@ -142,6 +142,7 @@ const fr: Dictionary = {
       apiKeys: "Clés API",
     },
     signOut: "Déconnexion",
+    scoreHistory: "Historique du score moyen",
   },
 
   apiKeys: {

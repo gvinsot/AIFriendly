@@ -142,6 +142,7 @@ const de: Dictionary = {
       apiKeys: "API-Schlüssel",
     },
     signOut: "Abmelden",
+    scoreHistory: "Durchschnittliche Bewertungshistorie",
   },
 
   apiKeys: {

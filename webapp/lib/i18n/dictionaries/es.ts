@@ -142,6 +142,7 @@ const es: Dictionary = {
       apiKeys: "Claves API",
     },
     signOut: "Cerrar sesión",
+    scoreHistory: "Historial de puntuación media",
   },
 
   apiKeys: {

@@ -142,6 +142,7 @@ const en: Dictionary = {
       apiKeys: "API Keys",
     },
     signOut: "Sign out",
+    scoreHistory: "Average score history",
   },
 
   apiKeys: {

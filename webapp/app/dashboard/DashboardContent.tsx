@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useI18n } from "@/lib/i18n/context";
+import { ScoreHistoryChart } from "./ScoreHistoryChart";
 
 type AnalysisType = "accessibility" | "availability" | "security";
 
@@ -18,9 +19,11 @@ interface DashboardContentProps {
   siteCount: number;
   avgScore: number | null;
   recentAnalyses: Analysis[];
+  scoreHistory: Record<string, string | number>[];
+  siteNames: string[];
 }
 
-export function DashboardContent({ siteCount, avgScore, recentAnalyses }: DashboardContentProps) {
+export function DashboardContent({ siteCount, avgScore, recentAnalyses, scoreHistory, siteNames }: DashboardContentProps) {
   const { t, locale } = useI18n();
 
   const dateLocale = locale === "fr" ? "fr-FR" : locale === "es" ? "es-ES" : locale === "de" ? "de-DE" : "en-US";
@@ -48,6 +51,20 @@ export function DashboardContent({ siteCount, avgScore, recentAnalyses }: Dashbo
           value={String(recentAnalyses.length)}
         />
       </div>
+
+      {/* Score history chart */}
+      {scoreHistory.length > 0 && siteNames.length > 0 && (
+        <section className="rounded-2xl bg-luxe-bg-elevated border border-luxe-border shadow-luxe overflow-hidden">
+          <div className="px-6 py-4 border-b border-luxe-border bg-luxe-bg-muted/50">
+            <h2 className="font-display text-lg font-semibold text-luxe-fg">
+              {t.dashboard.scoreHistory}
+            </h2>
+          </div>
+          <div className="p-6">
+            <ScoreHistoryChart data={scoreHistory} siteNames={siteNames} />
+          </div>
+        </section>
+      )}
 
       {/* Recent analyses */}
       <section className="rounded-2xl bg-luxe-bg-elevated border border-luxe-border shadow-luxe overflow-hidden">

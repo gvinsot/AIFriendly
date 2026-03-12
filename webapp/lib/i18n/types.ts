@@ -132,6 +132,7 @@ export interface Dictionary {
       apiKeys: string;
     };
     signOut: string;
+    scoreHistory: string;
   };
 
   // API Keys
