@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import type { Improvement } from "@/lib/types";
 import { useI18n } from "@/lib/i18n/context";
@@ -262,13 +262,17 @@ function LineChart({
 
 export default function SiteDetailPage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const siteId = params.id as string;
   const { t, locale } = useI18n();
 
   const dateLocale = locale === "fr" ? "fr-FR" : locale === "es" ? "es-ES" : locale === "de" ? "de-DE" : "en-US";
 
+  const tabParam = searchParams.get("tab");
+  const initialTab: TabId = tabParam === "ai" || tabParam === "availability" || tabParam === "security" ? tabParam : "ai";
+
   const [site, setSite] = useState<SiteInfo | null>(null);
-  const [activeTab, setActiveTab] = useState<TabId>("ai");
+  const [activeTab, setActiveTab] = useState<TabId>(initialTab);
   const [loading, setLoading] = useState(true);
 
   // AI state

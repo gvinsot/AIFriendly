@@ -55,9 +55,9 @@ export default async function DashboardPage() {
 
   // Merge all analysis types and sort by date
   const allAnalyses = [
-    ...aiAnalyses.map((a) => ({ id: a.id, score: a.score, createdAt: a.createdAt, siteName: a.site.name, siteUrl: a.site.url, type: "accessibility" as const })),
-    ...availabilityChecks.map((a) => ({ id: a.id, score: a.score, createdAt: a.createdAt, siteName: a.site.name, siteUrl: a.site.url, type: "availability" as const })),
-    ...securityScans.map((a) => ({ id: a.id, score: a.score, createdAt: a.createdAt, siteName: a.site.name, siteUrl: a.site.url, type: "security" as const })),
+    ...aiAnalyses.map((a) => ({ id: a.id, siteId: a.siteId, score: a.score, createdAt: a.createdAt, siteName: a.site.name, siteUrl: a.site.url, type: "accessibility" as const })),
+    ...availabilityChecks.map((a) => ({ id: a.id, siteId: a.siteId, score: a.score, createdAt: a.createdAt, siteName: a.site.name, siteUrl: a.site.url, type: "availability" as const })),
+    ...securityScans.map((a) => ({ id: a.id, siteId: a.siteId, score: a.score, createdAt: a.createdAt, siteName: a.site.name, siteUrl: a.site.url, type: "security" as const })),
   ]
     .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
     .slice(0, 5);
@@ -74,6 +74,7 @@ export default async function DashboardPage() {
   // Serialize for client component
   const serializedAnalyses = allAnalyses.map((a) => ({
     id: a.id,
+    siteId: a.siteId,
     score: a.score,
     createdAt: a.createdAt.toISOString(),
     siteName: a.siteName,

@@ -8,6 +8,7 @@ type AnalysisType = "accessibility" | "availability" | "security";
 
 interface Analysis {
   id: string;
+  siteId: string;
   score: number;
   createdAt: string;
   siteName: string;
@@ -93,26 +94,34 @@ export function DashboardContent({ siteCount, avgScore, recentAnalyses, scoreHis
           </div>
         ) : (
           <ul className="divide-y divide-luxe-border">
-            {recentAnalyses.map((analysis) => (
-              <li key={analysis.id} className="px-6 py-4 flex items-center justify-between hover:bg-luxe-bg-muted/30 transition-colors">
-                <div>
-                  <p className="text-sm font-medium text-luxe-fg flex items-center gap-2">
-                    {analysis.siteName}
-                    <AnalysisTypeBadge type={analysis.type} label={t.siteDetail.tabs[analysis.type === "accessibility" ? "ai" : analysis.type]} />
-                  </p>
-                  <p className="text-xs text-luxe-fg-muted mt-0.5">
-                    {new Date(analysis.createdAt).toLocaleDateString(dateLocale, {
-                      day: "numeric",
-                      month: "short",
-                      year: "numeric",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </p>
-                </div>
-                <ScoreBadge score={analysis.score} />
-              </li>
-            ))}
+            {recentAnalyses.map((analysis) => {
+              const tab = analysis.type === "accessibility" ? "ai" : analysis.type;
+              return (
+                <li key={analysis.id}>
+                  <Link
+                    href={`/dashboard/sites/${analysis.siteId}?tab=${tab}`}
+                    className="px-6 py-4 flex items-center justify-between hover:bg-luxe-bg-muted/30 transition-colors"
+                  >
+                    <div>
+                      <p className="text-sm font-medium text-luxe-fg flex items-center gap-2">
+                        {analysis.siteName}
+                        <AnalysisTypeBadge type={analysis.type} label={t.siteDetail.tabs[tab]} />
+                      </p>
+                      <p className="text-xs text-luxe-fg-muted mt-0.5">
+                        {new Date(analysis.createdAt).toLocaleDateString(dateLocale, {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </p>
+                    </div>
+                    <ScoreBadge score={analysis.score} />
+                  </Link>
+                </li>
+              );
+            })}
           </ul>
         )}
       </section>
