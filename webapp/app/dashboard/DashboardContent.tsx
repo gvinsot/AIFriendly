@@ -3,12 +3,15 @@
 import Link from "next/link";
 import { useI18n } from "@/lib/i18n/context";
 
+type AnalysisType = "accessibility" | "availability" | "security";
+
 interface Analysis {
   id: string;
   score: number;
   createdAt: string;
   siteName: string;
   siteUrl: string;
+  type: AnalysisType;
 }
 
 interface DashboardContentProps {
@@ -76,8 +79,9 @@ export function DashboardContent({ siteCount, avgScore, recentAnalyses }: Dashbo
             {recentAnalyses.map((analysis) => (
               <li key={analysis.id} className="px-6 py-4 flex items-center justify-between hover:bg-luxe-bg-muted/30 transition-colors">
                 <div>
-                  <p className="text-sm font-medium text-luxe-fg">
+                  <p className="text-sm font-medium text-luxe-fg flex items-center gap-2">
                     {analysis.siteName}
+                    <AnalysisTypeBadge type={analysis.type} label={t.siteDetail.tabs[analysis.type === "accessibility" ? "ai" : analysis.type]} />
                   </p>
                   <p className="text-xs text-luxe-fg-muted mt-0.5">
                     {new Date(analysis.createdAt).toLocaleDateString(dateLocale, {
@@ -109,6 +113,20 @@ function StatCard({ label, value }: { label: string; value: string }) {
         {value}
       </p>
     </div>
+  );
+}
+
+function AnalysisTypeBadge({ type, label }: { type: AnalysisType; label: string }) {
+  const colors: Record<AnalysisType, string> = {
+    accessibility: "text-violet-600 bg-violet-500/10 border-violet-500/20",
+    availability: "text-sky-600 bg-sky-500/10 border-sky-500/20",
+    security: "text-amber-600 bg-amber-500/10 border-amber-500/20",
+  };
+
+  return (
+    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium border ${colors[type]}`}>
+      {label}
+    </span>
   );
 }
 

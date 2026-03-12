@@ -7,7 +7,7 @@ export default async function DashboardPage() {
   const session = await auth();
   if (!session?.user?.id) redirect("/auth/signin");
 
-  const [siteCount, recentAnalyses] = await Promise.all([
+  const [siteCount, aiAnalyses, availabilityChecks, securityScans] = await Promise.all([
     prisma.site.count({ where: { userId: session.user.id } }),
     prisma.analysisResult.findMany({
       where: { site: { userId: session.user.id } },
@@ -15,24 +15,46 @@ export default async function DashboardPage() {
       take: 5,
       include: { site: { select: { name: true, url: true } } },
     }),
+    prisma.availabilityCheck.findMany({
+      where: { site: { userId: session.user.id } },
+      orderBy: { createdAt: "desc" },
+      take: 5,
+      include: { site: { select: { name: true, url: true } } },
+    }),
+    prisma.securityScan.findMany({
+      where: { site: { userId: session.user.id } },
+      orderBy: { createdAt: "desc" },
+      take: 5,
+      include: { site: { select: { name: true, url: true } } },
+    }),
   ]);
 
+  // Merge all analysis types and sort by date
+  const allAnalyses = [
+    ...aiAnalyses.map((a) => ({ id: a.id, score: a.score, createdAt: a.createdAt, siteName: a.site.name, siteUrl: a.site.url, type: "accessibility" as const })),
+    ...availabilityChecks.map((a) => ({ id: a.id, score: a.score, createdAt: a.createdAt, siteName: a.site.name, siteUrl: a.site.url, type: "availability" as const })),
+    ...securityScans.map((a) => ({ id: a.id, score: a.score, createdAt: a.createdAt, siteName: a.site.name, siteUrl: a.site.url, type: "security" as const })),
+  ]
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+    .slice(0, 5);
+
   const avgScore =
-    recentAnalyses.length > 0
+    allAnalyses.length > 0
       ? Math.round(
-          (recentAnalyses.reduce((sum, a) => sum + a.score, 0) /
-            recentAnalyses.length) *
+          (allAnalyses.reduce((sum, a) => sum + a.score, 0) /
+            allAnalyses.length) *
             10
         ) / 10
       : null;
 
   // Serialize for client component
-  const serializedAnalyses = recentAnalyses.map((a) => ({
+  const serializedAnalyses = allAnalyses.map((a) => ({
     id: a.id,
     score: a.score,
     createdAt: a.createdAt.toISOString(),
-    siteName: a.site.name,
-    siteUrl: a.site.url,
+    siteName: a.siteName,
+    siteUrl: a.siteUrl,
+    type: a.type,
   }));
 
   return (
