@@ -55,9 +55,9 @@ export default async function DashboardPage() {
 
   // Merge all analysis types and sort by date
   const allAnalyses = [
-    ...aiAnalyses.map((a) => ({ id: a.id, siteId: a.siteId, score: a.score, createdAt: a.createdAt, siteName: a.site.name, siteUrl: a.site.url, type: "accessibility" as const })),
-    ...availabilityChecks.map((a) => ({ id: a.id, siteId: a.siteId, score: a.score, createdAt: a.createdAt, siteName: a.site.name, siteUrl: a.site.url, type: "availability" as const })),
-    ...securityScans.map((a) => ({ id: a.id, siteId: a.siteId, score: a.score, createdAt: a.createdAt, siteName: a.site.name, siteUrl: a.site.url, type: "security" as const })),
+    ...aiAnalyses.map((a: typeof aiAnalyses[number]) => ({ id: a.id, siteId: a.siteId, score: a.score, createdAt: a.createdAt, siteName: a.site.name, siteUrl: a.site.url, type: "accessibility" as const })),
+    ...availabilityChecks.map((a: typeof availabilityChecks[number]) => ({ id: a.id, siteId: a.siteId, score: a.score, createdAt: a.createdAt, siteName: a.site.name, siteUrl: a.site.url, type: "availability" as const })),
+    ...securityScans.map((a: typeof securityScans[number]) => ({ id: a.id, siteId: a.siteId, score: a.score, createdAt: a.createdAt, siteName: a.site.name, siteUrl: a.site.url, type: "security" as const })),
   ]
     .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
     .slice(0, 5);
@@ -83,11 +83,11 @@ export default async function DashboardPage() {
   }));
 
   // Build score history data: daily average score per site
-  const siteMap = new Map(sites.map((s) => [s.id, s.name]));
+  const siteMap = new Map(sites.map((s: typeof sites[number]) => [s.id, s.name]));
   const allScores = [
-    ...allAiAnalyses.map((a) => ({ siteId: a.siteId, score: a.score, date: a.createdAt })),
-    ...allAvailabilityChecks.map((a) => ({ siteId: a.siteId, score: a.score, date: a.createdAt })),
-    ...allSecurityScans.map((a) => ({ siteId: a.siteId, score: a.score, date: a.createdAt })),
+    ...allAiAnalyses.map((a: typeof allAiAnalyses[number]) => ({ siteId: a.siteId, score: a.score, date: a.createdAt })),
+    ...allAvailabilityChecks.map((a: typeof allAvailabilityChecks[number]) => ({ siteId: a.siteId, score: a.score, date: a.createdAt })),
+    ...allSecurityScans.map((a: typeof allSecurityScans[number]) => ({ siteId: a.siteId, score: a.score, date: a.createdAt })),
   ];
 
   // Group by date (YYYY-MM-DD) + siteId -> average score

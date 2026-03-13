@@ -53,11 +53,11 @@ export function ScoreHistoryChart({ data, siteNames }: ScoreHistoryChartProps) {
             color: "#e2e8f0",
             fontSize: 13,
           }}
-          formatter={(value: number) => [`${value}/10`, undefined]}
-          labelFormatter={(label: string) => {
+          formatter={((value: number) => [`${value}/10`, undefined]) as never}
+          labelFormatter={((label: string) => {
             const [y, m, d] = label.split("-");
             return `${d}/${m}/${y}`;
-          }}
+          }) as never}
         />
         <Legend wrapperStyle={{ fontSize: 13 }} />
         {siteNames.map((name, i) => (

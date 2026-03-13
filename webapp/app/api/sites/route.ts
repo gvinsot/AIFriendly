@@ -22,7 +22,7 @@ export async function GET() {
     },
   });
 
-  const result = sites.map((s) => ({
+  const result = sites.map((s: typeof sites[number]) => ({
     id: s.id,
     name: s.name,
     url: s.url,
