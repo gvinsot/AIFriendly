@@ -61,7 +61,6 @@ export default async function DashboardPage() {
     id: s.id,
     name: s.name,
     url: s.url,
-    frequency: s.frequency,
     isActive: s.isActive,
     latestAi: s.analyses[0]
       ? { id: s.analyses[0].id, score: s.analyses[0].score, createdAt: s.analyses[0].createdAt.toISOString() }

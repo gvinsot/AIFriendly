@@ -12,7 +12,6 @@ interface SiteSummary {
   id: string;
   name: string;
   url: string;
-  frequency: string;
   isActive: boolean;
   latestAi: { id: string; score: number; createdAt: string } | null;
   latestAvailability: {
@@ -49,7 +48,7 @@ export function DashboardContent({ sites: initialSites, scoreHistory, siteNames 
   const [sites, setSites] = useState(initialSites);
   const [showForm, setShowForm] = useState(false);
   const [editingSiteId, setEditingSiteId] = useState<string | null>(null);
-  const [formData, setFormData] = useState({ name: "", url: "", frequency: "daily" });
+  const [formData, setFormData] = useState({ name: "", url: "" });
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -89,7 +88,7 @@ export function DashboardContent({ sites: initialSites, scoreHistory, siteNames 
       }
       setShowForm(false);
       setEditingSiteId(null);
-      setFormData({ name: "", url: "", frequency: "daily" });
+      setFormData({ name: "", url: "" });
       refreshPage();
     } catch {
       setFormError(t.common.connectionError);
@@ -107,7 +106,7 @@ export function DashboardContent({ sites: initialSites, scoreHistory, siteNames 
 
   function startEdit(site: SiteSummary) {
     setEditingSiteId(site.id);
-    setFormData({ name: site.name, url: site.url, frequency: site.frequency });
+    setFormData({ name: site.name, url: site.url });
     setShowForm(true);
     setFormError(null);
   }
@@ -115,7 +114,7 @@ export function DashboardContent({ sites: initialSites, scoreHistory, siteNames 
   function cancelForm() {
     setShowForm(false);
     setEditingSiteId(null);
-    setFormData({ name: "", url: "", frequency: "daily" });
+    setFormData({ name: "", url: "" });
     setFormError(null);
   }
 
@@ -137,7 +136,7 @@ export function DashboardContent({ sites: initialSites, scoreHistory, siteNames 
               onClick={() => {
                 setShowForm(true);
                 setEditingSiteId(null);
-                setFormData({ name: "", url: "", frequency: "daily" });
+                setFormData({ name: "", url: "" });
                 setFormError(null);
               }}
               className="rounded-lg border border-luxe-gold bg-luxe-gold/10 text-luxe-gold px-5 py-2.5 text-sm font-medium hover:bg-luxe-gold/20 transition-colors"
@@ -162,7 +161,7 @@ export function DashboardContent({ sites: initialSites, scoreHistory, siteNames 
             <p className="text-sm text-luxe-score-low">{formError}</p>
           )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs text-luxe-fg-muted mb-1.5">
                 {t.sites.siteName}
@@ -188,21 +187,6 @@ export function DashboardContent({ sites: initialSites, scoreHistory, siteNames 
                 required
                 className="w-full rounded-lg border border-luxe-border bg-luxe-bg px-4 py-2.5 text-sm text-luxe-fg placeholder-luxe-fg-muted/70 focus:outline-none focus:ring-1 focus:ring-luxe-border-focus"
               />
-            </div>
-            <div>
-              <label className="block text-xs text-luxe-fg-muted mb-1.5">
-                {t.sites.analysisFrequency}
-              </label>
-              <select
-                value={formData.frequency}
-                onChange={(e) => setFormData({ ...formData, frequency: e.target.value })}
-                className="w-full rounded-lg border border-luxe-border bg-luxe-bg px-4 py-2.5 text-sm text-luxe-fg focus:outline-none focus:ring-1 focus:ring-luxe-border-focus"
-              >
-                <option value="6h">{t.sites.frequencyOptions["6h"]}</option>
-                <option value="daily">{t.sites.frequencyOptions.daily}</option>
-                <option value="weekly">{t.sites.frequencyOptions.weekly}</option>
-                <option value="monthly">{t.sites.frequencyOptions.monthly}</option>
-              </select>
             </div>
           </div>
 
@@ -259,7 +243,7 @@ export function DashboardContent({ sites: initialSites, scoreHistory, siteNames 
             onClick={() => {
               setShowForm(true);
               setEditingSiteId(null);
-              setFormData({ name: "", url: "", frequency: "daily" });
+              setFormData({ name: "", url: "" });
             }}
             className="inline-flex items-center gap-2 rounded-lg border border-luxe-gold bg-luxe-gold/10 text-luxe-gold px-6 py-3 text-sm font-medium hover:bg-luxe-gold/20 transition-colors"
           >
@@ -326,10 +310,10 @@ function SiteCard({
       <div className="px-5 py-4 border-b border-luxe-border bg-luxe-bg-muted/30 flex items-center justify-between">
         <div className="min-w-0 flex items-center gap-3">
           {overallAvg !== null && <ScoreRing score={overallAvg} />}
-          <div className="min-w-0">
-            <h3 className="font-display font-semibold text-luxe-fg truncate">{site.name}</h3>
+          <Link href={`/dashboard/sites/${site.id}?tab=availability`} className="min-w-0 group/title">
+            <h3 className="font-display font-semibold text-luxe-fg truncate group-hover/title:text-luxe-gold transition-colors">{site.name}</h3>
             <p className="text-xs text-luxe-fg-muted truncate mt-0.5">{site.url}</p>
-          </div>
+          </Link>
         </div>
         <div className="flex items-center gap-1.5 shrink-0 ml-3">
           {!site.isActive && (

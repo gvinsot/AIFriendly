@@ -12,7 +12,6 @@ interface SiteInfo {
   id: string;
   name: string;
   url: string;
-  frequency: string;
   isActive: boolean;
 }
 
@@ -269,7 +268,7 @@ export default function SiteDetailPage() {
   const dateLocale = locale === "fr" ? "fr-FR" : locale === "es" ? "es-ES" : locale === "de" ? "de-DE" : "en-US";
 
   const tabParam = searchParams.get("tab");
-  const initialTab: TabId = tabParam === "ai" || tabParam === "availability" || tabParam === "security" ? tabParam : "ai";
+  const initialTab: TabId = tabParam === "ai" || tabParam === "availability" || tabParam === "security" ? tabParam : "availability";
 
   const [site, setSite] = useState<SiteInfo | null>(null);
   const [activeTab, setActiveTab] = useState<TabId>(initialTab);
@@ -403,7 +402,6 @@ export default function SiteDetailPage() {
           <Link href="/dashboard" className="text-xs text-luxe-fg-muted hover:text-luxe-gold transition-colors">&larr; {t.dashboard.nav.dashboard}</Link>
           <h1 className="font-display text-2xl font-semibold text-luxe-fg mt-1">{site.name}</h1>
           <p className="text-sm text-luxe-fg-muted mt-0.5">{site.url}</p>
-          <p className="text-xs text-luxe-fg-muted mt-1">{t.siteDetail.analysisLabel} {t.common.frequency[site.frequency as keyof typeof t.common.frequency]?.toLowerCase() || site.frequency}</p>
         </div>
       </div>
 

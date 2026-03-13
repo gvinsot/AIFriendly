@@ -89,8 +89,8 @@ const en: Dictionary = {
     // How it works
     howTitle: "Up and running in 3 minutes",
     howSteps: [
-      { step: "01", title: "Add your site", description: "Enter a URL and pick your monitoring frequency. That's it." },
-      { step: "02", title: "Tests run automatically", description: "Availability every minute, security every hour, AI readability on your schedule." },
+      { step: "01", title: "Add your site", description: "Enter a URL. That's it." },
+      { step: "02", title: "Tests run automatically", description: "Availability every minute, security and AI readability every hour." },
       { step: "03", title: "Get scores & alerts", description: "Dashboard with trends, history, and detailed breakdowns. Connect MCP for auto-fixes." },
     ],
     // CTA

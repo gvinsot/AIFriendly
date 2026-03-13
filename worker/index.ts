@@ -2,8 +2,8 @@
  * AI Friendly — Worker (Multi-task orchestrator v3.0)
  *
  * 3 parallel loops:
- * 1. AI Analysis — checks every 5 min, runs based on site frequency
- * 2. Availability Check — runs every 1 min for all active sites
+ * 1. AI Analysis — runs every 1 hour for all active sites
+ * 2. Availability Check — runs every 1 minute for all active sites
  * 3. Security Scan — runs every 1 hour for all active sites
  *
  * Also handles 60-day data retention cleanup.
@@ -15,9 +15,9 @@ import * as cheerio from "cheerio";
 const prisma = new PrismaClient();
 
 
-const AI_CHECK_INTERVAL_MS = 5 * 60 * 1000;       // 5 minutes
-const AVAILABILITY_INTERVAL_MS = 60 * 1000;        // 1 minute
-const SECURITY_INTERVAL_MS = 60 * 60 * 1000;       // 1 hour
+const AI_CHECK_INTERVAL_MS = 60 * 60 * 1000;       // 1 hour
+const AVAILABILITY_INTERVAL_MS = 60 * 1000;         // 1 minute
+const SECURITY_INTERVAL_MS = 60 * 60 * 1000;        // 1 hour
 const CLEANUP_INTERVAL_MS = 60 * 60 * 1000;        // 1 hour
 const RETENTION_DAYS = 60;
 const FETCH_TIMEOUT_MS = 15000;
@@ -34,16 +34,6 @@ const AI_BOT_AGENTS = [
 // ═══════════════════════════════════════════════════════════════
 // SHARED HELPERS
 // ═══════════════════════════════════════════════════════════════
-
-function getFrequencyMs(frequency: string): number {
-  switch (frequency) {
-    case "6h": return 6 * 60 * 60 * 1000;
-    case "daily": return 24 * 60 * 60 * 1000;
-    case "weekly": return 7 * 24 * 60 * 60 * 1000;
-    case "monthly": return 30 * 24 * 60 * 60 * 1000;
-    default: return 24 * 60 * 60 * 1000;
-  }
-}
 
 async function fetchTextFile(baseUrl: string, path: string): Promise<string | null> {
   try {
@@ -241,8 +231,7 @@ async function processAIAnalysis() {
   let analyzed = 0;
   for (const site of sites) {
     const lastAnalysis = site.analyses[0]?.createdAt;
-    const frequencyMs = getFrequencyMs(site.frequency);
-    const isDue = !lastAnalysis || (now.getTime() - lastAnalysis.getTime() > frequencyMs);
+    const isDue = !lastAnalysis || (now.getTime() - lastAnalysis.getTime() > AI_CHECK_INTERVAL_MS);
 
     if (!isDue) continue;
 

@@ -89,8 +89,8 @@ const fr: Dictionary = {
     // How it works
     howTitle: "Opérationnel en 3 minutes",
     howSteps: [
-      { step: "01", title: "Ajoutez votre site", description: "Entrez une URL et choisissez votre fréquence de monitoring. C'est tout." },
-      { step: "02", title: "Les tests tournent automatiquement", description: "Disponibilité chaque minute, sécurité chaque heure, accessibilité IA selon votre planning." },
+      { step: "01", title: "Ajoutez votre site", description: "Entrez une URL. C'est tout." },
+      { step: "02", title: "Les tests tournent automatiquement", description: "Disponibilité chaque minute, sécurité et accessibilité IA chaque heure." },
       { step: "03", title: "Obtenez scores & alertes", description: "Dashboard avec tendances, historique et détails complets. Connectez MCP pour l'auto-correction." },
     ],
     // CTA
