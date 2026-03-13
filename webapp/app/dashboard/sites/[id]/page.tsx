@@ -470,7 +470,14 @@ function AITab({ analyses, selectedAnalysis, analyzing, loadingDetail, onAnalyze
         <ActionButton loading={analyzing} onClick={onAnalyze} label={t.siteDetail.ai.analyzeButton} loadingLabel={t.siteDetail.ai.analyzingButton} />
       </div>
 
-      <ScoreChart entries={analyses} onClickEntry={onViewDetail} title={t.siteDetail.ai.scoreEvolution} />
+      <LineChart
+        title={t.siteDetail.ai.scoreEvolution}
+        yMax={10}
+        series={[
+          { label: t.common.score, color: "#F59E0B", data: analyses.map(a => ({ id: a.id, value: a.score, date: a.createdAt })) },
+        ]}
+        onClickPoint={onViewDetail}
+      />
 
       <HistoryList
         items={analyses}
