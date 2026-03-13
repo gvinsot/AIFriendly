@@ -7,7 +7,7 @@ export const LOCALES: { code: Locale; label: string; flag: string }[] = [
   { code: "de", label: "Deutsch", flag: "🇩🇪" },
 ];
 
-export const DEFAULT_LOCALE: Locale = "en";
+export const DEFAULT_LOCALE: Locale = "fr";
 
 export interface Dictionary {
   // Common
