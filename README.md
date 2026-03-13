@@ -93,4 +93,26 @@ Déploiement en stack : s'assurer que les variables (ex. `TRAEFIK_HOST`) sont ex
 
 ## Licence
 
-MIT
+Ce projet est distribué sous les termes de la **GNU Affero General Public License v3.0 (AGPL-3.0)**.
+
+### Ce que cela signifie
+
+L'AGPL v3.0 est une licence copyleft forte qui garantit les libertés suivantes :
+
+- **Utilisation** : Vous pouvez utiliser ce logiciel librement, y compris à des fins commerciales.
+- **Modification** : Vous pouvez modifier le code source selon vos besoins.
+- **Distribution** : Vous pouvez redistribuer le logiciel, modifie ou non.
+- **Acces au code source** : Si vous deployez une version modifiee de ce logiciel sur un serveur accessible via un reseau (SaaS, API, application web...), vous **devez** fournir le code source complet de votre version modifiee aux utilisateurs qui interagissent avec le service.
+
+### Conditions principales
+
+1. **Copyleft reseau** : Toute version modifiee deployee comme service reseau doit rester sous AGPL-3.0 et le code source doit etre accessible.
+2. **Attribution** : Vous devez conserver les mentions de copyright et de licence dans toutes les copies.
+3. **Modifications documentees** : Les fichiers modifies doivent porter une mention de modification.
+4. **Meme licence** : Les oeuvres derivees doivent etre distribuees sous AGPL-3.0.
+
+### Texte complet
+
+Le texte complet de la licence est disponible dans le fichier [LICENSE](./LICENSE) a la racine du projet, ainsi que sur le site officiel : https://www.gnu.org/licenses/agpl-3.0.html
+
+Copyright (c) 2024-2026 AIFriendly. Tous droits reserves.
