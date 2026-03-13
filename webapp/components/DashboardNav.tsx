@@ -27,14 +27,8 @@ export function DashboardNav({ user }: DashboardNavProps) {
             <span className="text-luxe-fg"> Friendly</span>
           </Link>
           <nav className="flex items-center gap-1">
-            <NavLink href="/dashboard" active={pathname === "/dashboard"}>
+            <NavLink href="/dashboard" active={pathname === "/dashboard" || pathname.startsWith("/dashboard/sites")}>
               {t.dashboard.nav.dashboard}
-            </NavLink>
-            <NavLink
-              href="/dashboard/sites"
-              active={pathname.startsWith("/dashboard/sites")}
-            >
-              {t.dashboard.nav.mySites}
             </NavLink>
             <NavLink
               href="/dashboard/api-keys"

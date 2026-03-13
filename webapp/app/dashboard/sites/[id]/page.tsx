@@ -390,7 +390,7 @@ export default function SiteDetailPage() {
     return (
       <div className="text-center py-20">
         <p className="text-luxe-fg-muted">{t.siteDetail.siteNotFound}</p>
-        <Link href="/dashboard/sites" className="text-sm text-luxe-gold hover:underline mt-2 inline-block">&larr; {t.common.back}</Link>
+        <Link href="/dashboard" className="text-sm text-luxe-gold hover:underline mt-2 inline-block">&larr; {t.dashboard.nav.dashboard}</Link>
       </div>
     );
   }
@@ -400,7 +400,7 @@ export default function SiteDetailPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <Link href="/dashboard/sites" className="text-xs text-luxe-fg-muted hover:text-luxe-gold transition-colors">&larr; {t.siteDetail.mySites}</Link>
+          <Link href="/dashboard" className="text-xs text-luxe-fg-muted hover:text-luxe-gold transition-colors">&larr; {t.dashboard.nav.dashboard}</Link>
           <h1 className="font-display text-2xl font-semibold text-luxe-fg mt-1">{site.name}</h1>
           <p className="text-sm text-luxe-fg-muted mt-0.5">{site.url}</p>
           <p className="text-xs text-luxe-fg-muted mt-1">{t.siteDetail.analysisLabel} {t.common.frequency[site.frequency as keyof typeof t.common.frequency]?.toLowerCase() || site.frequency}</p>

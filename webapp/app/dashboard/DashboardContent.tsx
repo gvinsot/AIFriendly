@@ -1,6 +1,8 @@
 "use client";
 
+import { useState, useCallback } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useI18n } from "@/lib/i18n/context";
 import { ScoreHistoryChart } from "./ScoreHistoryChart";
 
@@ -39,9 +41,17 @@ interface DashboardContentProps {
   siteNames: string[];
 }
 
-export function DashboardContent({ sites, scoreHistory, siteNames }: DashboardContentProps) {
+export function DashboardContent({ sites: initialSites, scoreHistory, siteNames }: DashboardContentProps) {
   const { t, locale } = useI18n();
+  const router = useRouter();
   const dateLocale = locale === "fr" ? "fr-FR" : locale === "es" ? "es-ES" : locale === "de" ? "de-DE" : "en-US";
+
+  const [sites, setSites] = useState(initialSites);
+  const [showForm, setShowForm] = useState(false);
+  const [editingSiteId, setEditingSiteId] = useState<string | null>(null);
+  const [formData, setFormData] = useState({ name: "", url: "", frequency: "daily" });
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   // Compute global stats
   const allScores: number[] = [];
@@ -53,6 +63,61 @@ export function DashboardContent({ sites, scoreHistory, siteNames }: DashboardCo
   const avgScore = allScores.length > 0
     ? Math.round((allScores.reduce((a, b) => a + b, 0) / allScores.length) * 10) / 10
     : null;
+
+  // ─── Site CRUD ───────────────────────────────────────────────────────────
+
+  const refreshPage = useCallback(() => {
+    router.refresh();
+  }, [router]);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setFormError(null);
+    setSaving(true);
+    try {
+      const method = editingSiteId ? "PUT" : "POST";
+      const url = editingSiteId ? `/api/sites/${editingSiteId}` : "/api/sites";
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        setFormError(data.error || t.sites.saveError);
+        return;
+      }
+      setShowForm(false);
+      setEditingSiteId(null);
+      setFormData({ name: "", url: "", frequency: "daily" });
+      refreshPage();
+    } catch {
+      setFormError(t.common.connectionError);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete(siteId: string) {
+    if (!confirm(t.sites.confirmDelete)) return;
+    await fetch(`/api/sites/${siteId}`, { method: "DELETE" });
+    setSites((prev) => prev.filter((s) => s.id !== siteId));
+    refreshPage();
+  }
+
+  function startEdit(site: SiteSummary) {
+    setEditingSiteId(site.id);
+    setFormData({ name: site.name, url: site.url, frequency: site.frequency });
+    setShowForm(true);
+    setFormError(null);
+  }
+
+  function cancelForm() {
+    setShowForm(false);
+    setEditingSiteId(null);
+    setFormData({ name: "", url: "", frequency: "daily" });
+    setFormError(null);
+  }
 
   return (
     <div className="space-y-8">
@@ -67,43 +132,121 @@ export function DashboardContent({ sites, scoreHistory, siteNames }: DashboardCo
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <Link
-            href="/dashboard/sites"
-            className="rounded-lg border border-luxe-border text-luxe-fg-muted px-4 py-2 text-sm hover:bg-luxe-bg-muted transition-colors"
-          >
-            {t.dashboard.manageSites}
-          </Link>
-          <Link
-            href="/dashboard/api-keys"
-            className="rounded-lg border border-luxe-border text-luxe-fg-muted px-4 py-2 text-sm hover:bg-luxe-bg-muted transition-colors"
-          >
-            {t.dashboard.nav.apiKeys}
-          </Link>
+          {!showForm && (
+            <button
+              onClick={() => {
+                setShowForm(true);
+                setEditingSiteId(null);
+                setFormData({ name: "", url: "", frequency: "daily" });
+                setFormError(null);
+              }}
+              className="rounded-lg border border-luxe-gold bg-luxe-gold/10 text-luxe-gold px-5 py-2.5 text-sm font-medium hover:bg-luxe-gold/20 transition-colors"
+            >
+              {t.sites.addSiteButton}
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Add/Edit form */}
+      {showForm && (
+        <form
+          onSubmit={handleSubmit}
+          className="rounded-2xl bg-luxe-bg-elevated border border-luxe-border shadow-luxe p-6 space-y-4"
+        >
+          <h2 className="font-display text-lg font-semibold text-luxe-fg">
+            {editingSiteId ? t.sites.editSite : t.sites.addSiteForm}
+          </h2>
+
+          {formError && (
+            <p className="text-sm text-luxe-score-low">{formError}</p>
+          )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-xs text-luxe-fg-muted mb-1.5">
+                {t.sites.siteName}
+              </label>
+              <input
+                type="text"
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                placeholder={t.sites.siteNamePlaceholder}
+                required
+                className="w-full rounded-lg border border-luxe-border bg-luxe-bg px-4 py-2.5 text-sm text-luxe-fg placeholder-luxe-fg-muted/70 focus:outline-none focus:ring-1 focus:ring-luxe-border-focus"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-luxe-fg-muted mb-1.5">
+                {t.sites.url}
+              </label>
+              <input
+                type="url"
+                value={formData.url}
+                onChange={(e) => setFormData({ ...formData, url: e.target.value })}
+                placeholder={t.sites.urlPlaceholder}
+                required
+                className="w-full rounded-lg border border-luxe-border bg-luxe-bg px-4 py-2.5 text-sm text-luxe-fg placeholder-luxe-fg-muted/70 focus:outline-none focus:ring-1 focus:ring-luxe-border-focus"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-luxe-fg-muted mb-1.5">
+                {t.sites.analysisFrequency}
+              </label>
+              <select
+                value={formData.frequency}
+                onChange={(e) => setFormData({ ...formData, frequency: e.target.value })}
+                className="w-full rounded-lg border border-luxe-border bg-luxe-bg px-4 py-2.5 text-sm text-luxe-fg focus:outline-none focus:ring-1 focus:ring-luxe-border-focus"
+              >
+                <option value="6h">{t.sites.frequencyOptions["6h"]}</option>
+                <option value="daily">{t.sites.frequencyOptions.daily}</option>
+                <option value="weekly">{t.sites.frequencyOptions.weekly}</option>
+                <option value="monthly">{t.sites.frequencyOptions.monthly}</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 pt-2">
+            <button
+              type="submit"
+              disabled={saving}
+              className="rounded-lg border border-luxe-gold bg-luxe-gold/10 text-luxe-gold px-6 py-2.5 text-sm font-medium hover:bg-luxe-gold/20 disabled:opacity-50 transition-colors"
+            >
+              {saving ? t.sites.savingButton : editingSiteId ? t.common.edit : t.common.add}
+            </button>
+            <button
+              type="button"
+              onClick={cancelForm}
+              className="rounded-lg border border-luxe-border text-luxe-fg-muted px-6 py-2.5 text-sm hover:bg-luxe-bg-muted transition-colors"
+            >
+              {t.common.cancel}
+            </button>
+          </div>
+        </form>
+      )}
 
       {/* Global stats bar */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <StatCard label={t.dashboard.registeredSites} value={String(sites.length)} />
-        <StatCard label={t.dashboard.averageScore} value={avgScore !== null ? `${avgScore}/10` : "—"} />
+        <StatCard label={t.dashboard.averageScore} value={avgScore !== null ? `${avgScore}/10` : "\u2014"} />
         <StatCard
           label={t.dashboard.availabilityScore}
           value={(() => {
             const scores = sites.filter(s => s.latestAvailability).map(s => s.latestAvailability!.score);
-            return scores.length ? `${(Math.round(scores.reduce((a, b) => a + b, 0) / scores.length * 10) / 10)}/10` : "—";
+            return scores.length ? `${(Math.round(scores.reduce((a, b) => a + b, 0) / scores.length * 10) / 10)}/10` : "\u2014";
           })()}
         />
         <StatCard
           label={t.dashboard.securityScore}
           value={(() => {
             const scores = sites.filter(s => s.latestSecurity).map(s => s.latestSecurity!.score);
-            return scores.length ? `${(Math.round(scores.reduce((a, b) => a + b, 0) / scores.length * 10) / 10)}/10` : "—";
+            return scores.length ? `${(Math.round(scores.reduce((a, b) => a + b, 0) / scores.length * 10) / 10)}/10` : "\u2014";
           })()}
         />
       </div>
 
       {/* Empty state */}
-      {sites.length === 0 && (
+      {sites.length === 0 && !showForm && (
         <div className="rounded-2xl bg-luxe-bg-elevated border border-luxe-border shadow-luxe p-12 text-center">
           <div className="inline-flex items-center justify-center size-16 rounded-2xl bg-luxe-gold/10 border border-luxe-gold/20 mb-4">
             <svg className="size-8 text-luxe-gold" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -112,12 +255,16 @@ export function DashboardContent({ sites, scoreHistory, siteNames }: DashboardCo
           </div>
           <h3 className="font-display text-lg font-semibold text-luxe-fg mb-2">{t.dashboard.noSitesTitle}</h3>
           <p className="text-sm text-luxe-fg-muted mb-6 max-w-md mx-auto">{t.dashboard.noSitesDescription}</p>
-          <Link
-            href="/dashboard/sites"
+          <button
+            onClick={() => {
+              setShowForm(true);
+              setEditingSiteId(null);
+              setFormData({ name: "", url: "", frequency: "daily" });
+            }}
             className="inline-flex items-center gap-2 rounded-lg border border-luxe-gold bg-luxe-gold/10 text-luxe-gold px-6 py-3 text-sm font-medium hover:bg-luxe-gold/20 transition-colors"
           >
             {t.dashboard.addFirstSite}
-          </Link>
+          </button>
         </div>
       )}
 
@@ -125,7 +272,13 @@ export function DashboardContent({ sites, scoreHistory, siteNames }: DashboardCo
       {sites.length > 0 && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           {sites.map((site) => (
-            <SiteCard key={site.id} site={site} dateLocale={dateLocale} />
+            <SiteCard
+              key={site.id}
+              site={site}
+              dateLocale={dateLocale}
+              onEdit={() => startEdit(site)}
+              onDelete={() => handleDelete(site.id)}
+            />
           ))}
         </div>
       )}
@@ -149,7 +302,17 @@ export function DashboardContent({ sites, scoreHistory, siteNames }: DashboardCo
 
 // ─── Site Card ───────────────────────────────────────────────────────────────
 
-function SiteCard({ site, dateLocale }: { site: DashboardContentProps["sites"][number]; dateLocale: string }) {
+function SiteCard({
+  site,
+  dateLocale,
+  onEdit,
+  onDelete,
+}: {
+  site: DashboardContentProps["sites"][number];
+  dateLocale: string;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
   const { t } = useI18n();
 
   const overallScores = [site.latestAi?.score, site.latestAvailability?.score, site.latestSecurity?.score].filter((s): s is number => s != null);
@@ -159,26 +322,39 @@ function SiteCard({ site, dateLocale }: { site: DashboardContentProps["sites"][n
 
   return (
     <div className="rounded-2xl bg-luxe-bg-elevated border border-luxe-border shadow-luxe overflow-hidden hover:border-luxe-border-focus transition-colors">
-      {/* Site header — click goes to site detail (history) */}
-      <Link
-        href={`/dashboard/sites/${site.id}`}
-        className="block px-5 py-4 border-b border-luxe-border bg-luxe-bg-muted/30 flex items-center justify-between hover:bg-luxe-bg-muted/50 transition-colors group"
-      >
-        <div className="min-w-0">
-          <h3 className="font-display font-semibold text-luxe-fg truncate group-hover:text-luxe-gold transition-colors">{site.name}</h3>
-          <p className="text-xs text-luxe-fg-muted truncate mt-0.5">{site.url}</p>
-        </div>
-        <div className="flex items-center gap-2 shrink-0 ml-3">
+      {/* Site header */}
+      <div className="px-5 py-4 border-b border-luxe-border bg-luxe-bg-muted/30 flex items-center justify-between">
+        <div className="min-w-0 flex items-center gap-3">
           {overallAvg !== null && <ScoreRing score={overallAvg} />}
+          <div className="min-w-0">
+            <h3 className="font-display font-semibold text-luxe-fg truncate">{site.name}</h3>
+            <p className="text-xs text-luxe-fg-muted truncate mt-0.5">{site.url}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0 ml-3">
           {!site.isActive && (
             <span className="text-[10px] text-luxe-fg-muted border border-luxe-border rounded-full px-2 py-0.5">
               {t.sites.inactive}
             </span>
           )}
+          <button
+            onClick={onEdit}
+            className="rounded-lg border border-luxe-border text-luxe-fg-muted px-2.5 py-1.5 text-[10px] hover:bg-luxe-bg-muted transition-colors"
+            title={t.common.edit}
+          >
+            {t.common.edit}
+          </button>
+          <button
+            onClick={onDelete}
+            className="rounded-lg border border-luxe-score-low/30 text-luxe-score-low px-2.5 py-1.5 text-[10px] hover:bg-luxe-score-low/10 transition-colors"
+            title={t.common.delete}
+          >
+            {t.common.delete}
+          </button>
         </div>
-      </Link>
+      </div>
 
-      {/* 3-column score grid */}
+      {/* 3-column score grid — each links directly to the history tab */}
       <div className="grid grid-cols-3 divide-x divide-luxe-border">
         {/* AI Accessibility */}
         <Link
