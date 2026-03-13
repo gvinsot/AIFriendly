@@ -133,6 +133,23 @@ export interface Dictionary {
     };
     signOut: string;
     scoreHistory: string;
+    overviewSubtitle: string;
+    noSitesTitle: string;
+    noSitesDescription: string;
+    addFirstSite: string;
+    aiScore: string;
+    availabilityScore: string;
+    securityScore: string;
+    notScanned: string;
+    lastCheck: string;
+    viewDetails: string;
+    runAll: string;
+    globalHealth: string;
+    siteHealth: string;
+    httpStatus: string;
+    responseTime: string;
+    overallScore: string;
+    manageSites: string;
   };
 
   // API Keys

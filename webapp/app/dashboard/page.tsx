@@ -10,32 +10,35 @@ export default async function DashboardPage() {
   const sixtyDaysAgo = new Date();
   sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
 
-  const [siteCount, aiAnalyses, availabilityChecks, securityScans, sites, allAiAnalyses, allAvailabilityChecks, allSecurityScans] = await Promise.all([
-    prisma.site.count({ where: { userId: session.user.id } }),
-    prisma.analysisResult.findMany({
-      where: { site: { userId: session.user.id } },
+  const [sitesWithScores, sites, allAiAnalyses, allAvailabilityChecks, allSecurityScans] = await Promise.all([
+    // Per-site summary with latest scores
+    prisma.site.findMany({
+      where: { userId: session.user.id },
       orderBy: { createdAt: "desc" },
-      take: 5,
-      include: { site: { select: { name: true, url: true } } },
+      include: {
+        analyses: {
+          orderBy: { createdAt: "desc" },
+          take: 1,
+          select: { id: true, score: true, createdAt: true },
+        },
+        availabilityChecks: {
+          orderBy: { createdAt: "desc" },
+          take: 1,
+          select: { id: true, score: true, httpStatus: true, pingMs: true, loadTimeMs: true, createdAt: true },
+        },
+        securityScans: {
+          orderBy: { createdAt: "desc" },
+          take: 1,
+          select: { id: true, score: true, headersScore: true, sslScore: true, cookiesScore: true, infoLeakScore: true, injectionScore: true, createdAt: true },
+        },
+      },
     }),
-    prisma.availabilityCheck.findMany({
-      where: { site: { userId: session.user.id } },
-      orderBy: { createdAt: "desc" },
-      take: 5,
-      include: { site: { select: { name: true, url: true } } },
-    }),
-    prisma.securityScan.findMany({
-      where: { site: { userId: session.user.id } },
-      orderBy: { createdAt: "desc" },
-      take: 5,
-      include: { site: { select: { name: true, url: true } } },
-    }),
-    // Fetch sites for chart
+    // Sites for chart legend
     prisma.site.findMany({
       where: { userId: session.user.id },
       select: { id: true, name: true },
     }),
-    // Fetch all analyses from last 60 days for the chart
+    // Score history data (last 60 days)
     prisma.analysisResult.findMany({
       where: { site: { userId: session.user.id }, createdAt: { gte: sixtyDaysAgo } },
       orderBy: { createdAt: "asc" },
@@ -53,36 +56,41 @@ export default async function DashboardPage() {
     }),
   ]);
 
-  // Merge all analysis types and sort by date
-  const allAnalyses = [
-    ...aiAnalyses.map((a: typeof aiAnalyses[number]) => ({ id: a.id, siteId: a.siteId, score: a.score, createdAt: a.createdAt, siteName: a.site.name, siteUrl: a.site.url, type: "accessibility" as const })),
-    ...availabilityChecks.map((a: typeof availabilityChecks[number]) => ({ id: a.id, siteId: a.siteId, score: a.score, createdAt: a.createdAt, siteName: a.site.name, siteUrl: a.site.url, type: "availability" as const })),
-    ...securityScans.map((a: typeof securityScans[number]) => ({ id: a.id, siteId: a.siteId, score: a.score, createdAt: a.createdAt, siteName: a.site.name, siteUrl: a.site.url, type: "security" as const })),
-  ]
-    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-    .slice(0, 5);
-
-  const avgScore =
-    allAnalyses.length > 0
-      ? Math.round(
-          (allAnalyses.reduce((sum, a) => sum + a.score, 0) /
-            allAnalyses.length) *
-            10
-        ) / 10
-      : null;
-
-  // Serialize for client component
-  const serializedAnalyses = allAnalyses.map((a) => ({
-    id: a.id,
-    siteId: a.siteId,
-    score: a.score,
-    createdAt: a.createdAt.toISOString(),
-    siteName: a.siteName,
-    siteUrl: a.siteUrl,
-    type: a.type,
+  // Serialize site summaries
+  const serializedSites = sitesWithScores.map((s: typeof sitesWithScores[number]) => ({
+    id: s.id,
+    name: s.name,
+    url: s.url,
+    frequency: s.frequency,
+    isActive: s.isActive,
+    latestAi: s.analyses[0]
+      ? { id: s.analyses[0].id, score: s.analyses[0].score, createdAt: s.analyses[0].createdAt.toISOString() }
+      : null,
+    latestAvailability: s.availabilityChecks[0]
+      ? {
+          id: s.availabilityChecks[0].id,
+          score: s.availabilityChecks[0].score,
+          httpStatus: s.availabilityChecks[0].httpStatus,
+          pingMs: s.availabilityChecks[0].pingMs,
+          loadTimeMs: s.availabilityChecks[0].loadTimeMs,
+          createdAt: s.availabilityChecks[0].createdAt.toISOString(),
+        }
+      : null,
+    latestSecurity: s.securityScans[0]
+      ? {
+          id: s.securityScans[0].id,
+          score: s.securityScans[0].score,
+          headersScore: s.securityScans[0].headersScore,
+          sslScore: s.securityScans[0].sslScore,
+          cookiesScore: s.securityScans[0].cookiesScore,
+          infoLeakScore: s.securityScans[0].infoLeakScore,
+          injectionScore: s.securityScans[0].injectionScore,
+          createdAt: s.securityScans[0].createdAt.toISOString(),
+        }
+      : null,
   }));
 
-  // Build score history data: daily average score per site
+  // Build score history data
   const siteMap = new Map(sites.map((s: typeof sites[number]) => [s.id, s.name]));
   const allScores = [
     ...allAiAnalyses.map((a: typeof allAiAnalyses[number]) => ({ siteId: a.siteId, score: a.score, date: a.createdAt })),
@@ -90,7 +98,6 @@ export default async function DashboardPage() {
     ...allSecurityScans.map((a: typeof allSecurityScans[number]) => ({ siteId: a.siteId, score: a.score, date: a.createdAt })),
   ];
 
-  // Group by date (YYYY-MM-DD) + siteId -> average score
   const dailyMap = new Map<string, Map<string, { sum: number; count: number }>>();
   for (const entry of allScores) {
     const dateKey = entry.date.toISOString().slice(0, 10);
@@ -102,7 +109,7 @@ export default async function DashboardPage() {
     acc.count += 1;
   }
 
-  const siteNames = [...new Set(allScores.map((s) => s.siteId))].map((id) => ({
+  const siteNamesList = [...new Set(allScores.map((s) => s.siteId))].map((id) => ({
     id,
     name: siteMap.get(id) || id,
   }));
@@ -111,7 +118,7 @@ export default async function DashboardPage() {
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([date, sitesData]) => {
       const point: Record<string, string | number> = { date };
-      for (const { id, name } of siteNames) {
+      for (const { id, name } of siteNamesList) {
         const acc = sitesData.get(id);
         if (acc) point[name] = Math.round((acc.sum / acc.count) * 10) / 10;
       }
@@ -120,11 +127,9 @@ export default async function DashboardPage() {
 
   return (
     <DashboardContent
-      siteCount={siteCount}
-      avgScore={avgScore}
-      recentAnalyses={serializedAnalyses}
+      sites={serializedSites}
       scoreHistory={scoreHistory}
-      siteNames={siteNames.map((s) => s.name)}
+      siteNames={siteNamesList.map((s) => s.name)}
     />
   );
 }
