@@ -159,10 +159,13 @@ function SiteCard({ site, dateLocale }: { site: DashboardContentProps["sites"][n
 
   return (
     <div className="rounded-2xl bg-luxe-bg-elevated border border-luxe-border shadow-luxe overflow-hidden hover:border-luxe-border-focus transition-colors">
-      {/* Site header */}
-      <div className="px-5 py-4 border-b border-luxe-border bg-luxe-bg-muted/30 flex items-center justify-between">
+      {/* Site header — click goes to site detail (history) */}
+      <Link
+        href={`/dashboard/sites/${site.id}`}
+        className="block px-5 py-4 border-b border-luxe-border bg-luxe-bg-muted/30 flex items-center justify-between hover:bg-luxe-bg-muted/50 transition-colors group"
+      >
         <div className="min-w-0">
-          <h3 className="font-display font-semibold text-luxe-fg truncate">{site.name}</h3>
+          <h3 className="font-display font-semibold text-luxe-fg truncate group-hover:text-luxe-gold transition-colors">{site.name}</h3>
           <p className="text-xs text-luxe-fg-muted truncate mt-0.5">{site.url}</p>
         </div>
         <div className="flex items-center gap-2 shrink-0 ml-3">
@@ -173,7 +176,7 @@ function SiteCard({ site, dateLocale }: { site: DashboardContentProps["sites"][n
             </span>
           )}
         </div>
-      </div>
+      </Link>
 
       {/* 3-column score grid */}
       <div className="grid grid-cols-3 divide-x divide-luxe-border">
