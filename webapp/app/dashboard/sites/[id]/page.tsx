@@ -547,8 +547,6 @@ function AvailabilityTab({ checks, selectedCheck, checking, loadingDetail, onChe
         </div>
       )}
 
-      <ScoreChart entries={checks.map(c => ({ id: c.id, score: c.score, createdAt: c.createdAt }))} onClickEntry={onViewDetail} title={t.siteDetail.availability.scoreTrend} />
-
       <LineChart
         title={t.siteDetail.availability.scoreTrend}
         yMax={10}
