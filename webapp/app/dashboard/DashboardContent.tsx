@@ -86,6 +86,33 @@ export function DashboardContent({ sites: initialSites, scoreHistory, siteNames 
         setFormError(data.error || t.sites.saveError);
         return;
       }
+      
+      const savedSite = await res.json();
+      
+      // Update local state immediately so the site appears without refresh
+      if (editingSiteId) {
+        // Update existing site
+        setSites((prev) =>
+          prev.map((s) =>
+            s.id === editingSiteId
+              ? { ...s, name: formData.name, url: formData.url }
+              : s
+          )
+        );
+      } else {
+        // Add new site to the beginning of the list with placeholder scores
+        const newSite: SiteSummary = {
+          id: savedSite.id,
+          name: formData.name,
+          url: formData.url,
+          isActive: savedSite.isActive ?? true,
+          latestAi: null,
+          latestAvailability: null,
+          latestSecurity: null,
+        };
+        setSites((prev) => [newSite, ...prev]);
+      }
+      
       setShowForm(false);
       setEditingSiteId(null);
       setFormData({ name: "", url: "" });
