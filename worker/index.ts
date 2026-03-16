@@ -2,8 +2,8 @@
  * AI Friendly — Worker (Multi-task orchestrator v3.0)
  *
  * 3 parallel loops:
- * 1. AI Analysis — checks every 5 min, runs based on site frequency
- * 2. Availability Check — runs every 1 min for all active sites
+ * 1. AI Analysis — runs every 1 hour for all active sites
+ * 2. Availability Check — runs every 1 minute for all active sites
  * 3. Security Scan — runs every 1 hour for all active sites
  *
  * Also handles 60-day data retention cleanup.
@@ -14,10 +14,18 @@ import * as cheerio from "cheerio";
 
 const prisma = new PrismaClient();
 
+// ═══════════════════════════════════════════════════════════════
+// LLM CONFIGURATION (vLLM / OpenAI-compatible)
+// ═══════════════════════════════════════════════════════════════
+const VLLM_API_URL = process.env.VLLM_API_URL || "";      // e.g. http://vllm:8000/v1
+const VLLM_API_KEY = process.env.VLLM_API_KEY || "";       // API key (optional for local vLLM)
+const VLLM_MODEL = process.env.VLLM_MODEL || "default";    // Model name served by vLLM
+const LLM_ENABLED = !!VLLM_API_URL;
+const LLM_TIMEOUT_MS = 30000;
 
-const AI_CHECK_INTERVAL_MS = 5 * 60 * 1000;       // 5 minutes
-const AVAILABILITY_INTERVAL_MS = 60 * 1000;        // 1 minute
-const SECURITY_INTERVAL_MS = 60 * 60 * 1000;       // 1 hour
+const AI_CHECK_INTERVAL_MS = 60 * 60 * 1000;       // 1 hour
+const AVAILABILITY_INTERVAL_MS = 60 * 1000;         // 1 minute
+const SECURITY_INTERVAL_MS = 60 * 60 * 1000;        // 1 hour
 const CLEANUP_INTERVAL_MS = 60 * 60 * 1000;        // 1 hour
 const RETENTION_DAYS = 60;
 const FETCH_TIMEOUT_MS = 15000;
@@ -34,16 +42,6 @@ const AI_BOT_AGENTS = [
 // ═══════════════════════════════════════════════════════════════
 // SHARED HELPERS
 // ═══════════════════════════════════════════════════════════════
-
-function getFrequencyMs(frequency: string): number {
-  switch (frequency) {
-    case "6h": return 6 * 60 * 60 * 1000;
-    case "daily": return 24 * 60 * 60 * 1000;
-    case "weekly": return 7 * 24 * 60 * 60 * 1000;
-    case "monthly": return 30 * 24 * 60 * 60 * 1000;
-    default: return 24 * 60 * 60 * 1000;
-  }
-}
 
 async function fetchTextFile(baseUrl: string, path: string): Promise<string | null> {
   try {
@@ -78,6 +76,130 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutM
 function escapeYaml(s: string): string {
   if (/[\n"\\]/.test(s)) return `"${s.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n")}"`;
   return s;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// LLM-BASED CONTENT ANALYSIS
+// ═══════════════════════════════════════════════════════════════
+
+interface LLMScores {
+  ethicsScore: number;
+  coherenceScore: number;
+  aiGeneratedScore: number;
+  ethicsImprovements: { title: string; description: string; severity: "critical" | "warning" | "info" }[];
+  coherenceImprovements: { title: string; description: string; severity: "critical" | "warning" | "info" }[];
+  aiDetectionImprovements: { title: string; description: string; severity: "critical" | "warning" | "info" }[];
+}
+
+async function analyzWithLLM(textContent: string, title: string | null, lang: string | null, url: string): Promise<LLMScores | null> {
+  if (!LLM_ENABLED) return null;
+
+  const truncatedContent = textContent.slice(0, 3000);
+
+  const systemPrompt = `You are an expert web content analyst. You must analyze webpage content and return a JSON object with scores and improvement suggestions.
+
+Score each category from 0 to 10 (10 = best):
+
+1. **ethicsScore**: Is the content ethical and safe? Check for:
+   - Misleading or deceptive content
+   - Harmful, hateful, or discriminatory language
+   - Spam or manipulative SEO content
+   - Privacy-violating content or dark patterns
+   - Inappropriate or offensive material
+
+2. **coherenceScore**: Is the content well-structured and coherent? Check for:
+   - Logical flow and organization
+   - Grammar and readability quality
+   - Clear purpose and messaging
+   - Consistent tone and style
+   - Proper use of headings and sections
+
+3. **aiGeneratedScore**: Does the content appear human-written? (10 = clearly human, 0 = clearly AI-generated). Check for:
+   - Overly generic or template-like phrasing
+   - Lack of personal anecdotes or opinions
+   - Unnaturally perfect structure
+   - Repetitive transitional phrases
+   - Missing personality or unique voice
+
+Return ONLY valid JSON matching this exact structure (no markdown, no explanation):
+{
+  "ethicsScore": <number 0-10>,
+  "coherenceScore": <number 0-10>,
+  "aiGeneratedScore": <number 0-10>,
+  "ethicsImprovements": [{"title": "...", "description": "...", "severity": "critical|warning|info"}],
+  "coherenceImprovements": [{"title": "...", "description": "...", "severity": "critical|warning|info"}],
+  "aiDetectionImprovements": [{"title": "...", "description": "...", "severity": "critical|warning|info"}]
+}
+
+Keep improvement arrays short (max 3 items each). Write in French.`;
+
+  const userPrompt = `URL: ${url}
+Title: ${title || "(absent)"}
+Language: ${lang || "(non spécifié)"}
+
+Content:
+${truncatedContent}`;
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), LLM_TIMEOUT_MS);
+
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+    if (VLLM_API_KEY) headers["Authorization"] = `Bearer ${VLLM_API_KEY}`;
+
+    const res = await fetch(`${VLLM_API_URL}/chat/completions`, {
+      method: "POST",
+      headers,
+      signal: controller.signal,
+      body: JSON.stringify({
+        model: VLLM_MODEL,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        temperature: 0.1,
+        max_tokens: 1024,
+        response_format: { type: "json_object" },
+      }),
+    });
+    clearTimeout(timeout);
+
+    if (!res.ok) {
+      console.error(`  [LLM] API error: ${res.status} ${res.statusText}`);
+      return null;
+    }
+
+    const data = await res.json();
+    const content = data.choices?.[0]?.message?.content;
+    if (!content) return null;
+
+    const parsed = JSON.parse(content);
+
+    // Validate and clamp scores
+    const clamp = (v: unknown) => Math.max(0, Math.min(10, Math.round((Number(v) || 0) * 10) / 10));
+    const validImprovements = (arr: unknown) =>
+      Array.isArray(arr)
+        ? arr.slice(0, 3).map((item: Record<string, string>) => ({
+            title: String(item.title || ""),
+            description: String(item.description || ""),
+            severity: (["critical", "warning", "info"].includes(item.severity) ? item.severity : "info") as "critical" | "warning" | "info",
+          }))
+        : [];
+
+    return {
+      ethicsScore: clamp(parsed.ethicsScore),
+      coherenceScore: clamp(parsed.coherenceScore),
+      aiGeneratedScore: clamp(parsed.aiGeneratedScore),
+      ethicsImprovements: validImprovements(parsed.ethicsImprovements),
+      coherenceImprovements: validImprovements(parsed.coherenceImprovements),
+      aiDetectionImprovements: validImprovements(parsed.aiDetectionImprovements),
+    };
+  } catch (err) {
+    console.error(`  [LLM] Error: ${err instanceof Error ? err.message : err}`);
+    return null;
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -149,7 +271,11 @@ async function analyzeUrl(targetUrl: string) {
 
   const llmsExists = !!(llmsTxt && llmsTxt.length > 10);
   const improvements: Improvement[] = [];
-  let score = 10;
+
+  // Sub-scores
+  let ethicsScore = 10;
+  let coherenceScore = 10;
+  let aiGeneratedScore = 10;
 
   const title = $("title").first().text().trim() || $('meta[property="og:title"]').attr("content")?.trim() || null;
   const metaDesc = $('meta[name="description"]').attr("content")?.trim() || null;
@@ -157,8 +283,9 @@ async function analyzeUrl(targetUrl: string) {
   const ogImage = $('meta[property="og:image"]').attr("content")?.trim() || null;
   const ogType = $('meta[property="og:type"]').attr("content")?.trim() || null;
 
-  if (!title || title.length < 10) { score -= 1.5; improvements.push({ id: "title", title: "Titre de page manquant ou trop court", description: "Un titre explicite aide les IA.", severity: "critical", category: "Métadonnées" }); }
-  if (!metaDesc || metaDesc.length < 50) { score -= 1; improvements.push({ id: "meta-description", title: "Meta description absente ou trop courte", description: "La meta description est utilisée comme résumé.", severity: metaDesc ? "warning" : "critical", category: "Métadonnées" }); }
+  // ── Coherence ──
+  if (!title || title.length < 10) { coherenceScore -= 2; improvements.push({ id: "title", title: "Titre de page manquant ou trop court", description: "Un titre explicite aide les IA.", severity: "critical", category: "Cohérence" }); }
+  if (!metaDesc || metaDesc.length < 50) { coherenceScore -= 1.5; improvements.push({ id: "meta-description", title: "Meta description absente ou trop courte", description: "La meta description est utilisée comme résumé.", severity: metaDesc ? "warning" : "critical", category: "Cohérence" }); }
 
   const headings: { level: number; text: string }[] = [];
   $("h1, h2, h3, h4, h5, h6").each((_, el) => {
@@ -166,53 +293,139 @@ async function analyzeUrl(targetUrl: string) {
     const text = $(el).text().trim();
     if (text) headings.push({ level, text });
   });
-  if (headings.filter((h) => h.level === 1).length === 0) { score -= 1; improvements.push({ id: "h1", title: "Aucun titre H1", description: "Un seul H1 par page.", severity: "critical", category: "Structure" }); }
+  if (headings.filter((h) => h.level === 1).length === 0) { coherenceScore -= 1.5; improvements.push({ id: "h1", title: "Aucun titre H1", description: "Un seul H1 par page.", severity: "critical", category: "Cohérence" }); }
 
   const mainContent = $("main").text().trim() || $("article").first().text().trim() || $("body").text().trim();
   const mainClean = mainContent.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 3000);
-  if (mainClean.length < 100) { score -= 0.5; improvements.push({ id: "content", title: "Peu de contenu texte", description: "Les IA s'appuient sur le texte.", severity: "warning", category: "Contenu" }); }
+  if (mainClean.length < 100) { coherenceScore -= 1; improvements.push({ id: "content", title: "Peu de contenu texte", description: "Les IA s'appuient sur le texte.", severity: "warning", category: "Cohérence" }); }
 
   let imgNoAlt = 0;
   $("img").each((_, el) => { if ($(el).attr("src") && !$(el).attr("alt")?.trim()) imgNoAlt++; });
-  if (imgNoAlt > 0) { score -= Math.min(0.5, imgNoAlt * 0.2); improvements.push({ id: "alt", title: `Images sans alt (${imgNoAlt})`, description: "L'attribut alt est important.", severity: imgNoAlt > 3 ? "warning" : "info", category: "Images" }); }
+  if (imgNoAlt > 0) { coherenceScore -= Math.min(1, imgNoAlt * 0.3); improvements.push({ id: "alt", title: `Images sans alt (${imgNoAlt})`, description: "L'attribut alt est important.", severity: imgNoAlt > 3 ? "warning" : "info", category: "Cohérence" }); }
 
-  if (!lang) { score -= 0.3; improvements.push({ id: "lang", title: "Langue non indiquée", description: "L'attribut lang aide l'interprétation.", severity: "info", category: "Métadonnées" }); }
-  if (!robotsExists) { score -= 0.3; improvements.push({ id: "robots-txt", title: "robots.txt absent", description: "Guide les crawlers.", severity: "warning", category: "Accessibilité Bots" }); }
-  else if (blocksAI.length > 0) { score -= 0.5; improvements.push({ id: "robots-blocks-ai", title: `Crawlers IA bloqués`, description: `Bloqués: ${blocksAI.join(", ")}`, severity: "warning", category: "Accessibilité Bots" }); }
-  if (!sitemapExists) { score -= 0.3; improvements.push({ id: "sitemap", title: "Sitemap XML absent", description: "Aide à l'indexation.", severity: "warning", category: "Accessibilité Bots" }); }
-  if (llmsExists) score += 0.2;
-
-  const metaRobots = $('meta[name="robots"]').attr("content")?.toLowerCase() || "";
-  if (metaRobots.includes("noindex")) { score -= 1; improvements.push({ id: "noindex", title: "Page noindex", description: "Non indexable.", severity: "critical", category: "Accessibilité Bots" }); }
+  if (!lang) { coherenceScore -= 0.5; improvements.push({ id: "lang", title: "Langue non indiquée", description: "L'attribut lang aide l'interprétation.", severity: "info", category: "Cohérence" }); }
 
   const semanticCount = [$("nav").length, $("header").length, $("footer").length, $("main").length, $("article").length, $("section").length].filter(n => n > 0).length;
-  if (semanticCount < 3) { score -= 0.5; improvements.push({ id: "semantic-html", title: "Peu de HTML sémantique", description: "Utilisez nav, header, main, etc.", severity: "warning", category: "Structure" }); }
+  if (semanticCount < 3) { coherenceScore -= 1; improvements.push({ id: "semantic-html", title: "Peu de HTML sémantique", description: "Utilisez nav, header, main, etc.", severity: "warning", category: "Cohérence" }); }
 
   const h1Count = headings.filter(h => h.level === 1).length;
-  if (h1Count > 1) { score -= 0.3; improvements.push({ id: "multiple-h1", title: `${h1Count} H1 détectés`, description: "Un seul H1 recommandé.", severity: "warning", category: "Structure" }); }
+  if (h1Count > 1) { coherenceScore -= 0.5; improvements.push({ id: "multiple-h1", title: `${h1Count} H1 détectés`, description: "Un seul H1 recommandé.", severity: "warning", category: "Cohérence" }); }
 
   const missingOg: string[] = [];
   if (!ogImage) missingOg.push("og:image");
   if (!ogType) missingOg.push("og:type");
-  if (missingOg.length > 0) { score -= Math.min(0.5, missingOg.length * 0.15); improvements.push({ id: "open-graph", title: `OG manquants: ${missingOg.join(", ")}`, description: "Améliore le partage.", severity: "info", category: "Métadonnées" }); }
+  if (missingOg.length > 0) { coherenceScore -= Math.min(1, missingOg.length * 0.3); improvements.push({ id: "open-graph", title: `OG manquants: ${missingOg.join(", ")}`, description: "Améliore le partage.", severity: "info", category: "Cohérence" }); }
 
+  // ── Ethics / Risk ──
+  const metaRobots = $('meta[name="robots"]').attr("content")?.toLowerCase() || "";
+  if (!robotsExists) { ethicsScore -= 0.5; improvements.push({ id: "robots-txt", title: "robots.txt absent", description: "Guide les crawlers.", severity: "warning", category: "Éthique & Risque" }); }
+  else if (blocksAI.length > 0) { ethicsScore -= 1; improvements.push({ id: "robots-blocks-ai", title: `Crawlers IA bloqués`, description: `Bloqués: ${blocksAI.join(", ")}`, severity: "warning", category: "Éthique & Risque" }); }
+  if (!sitemapExists) { ethicsScore -= 0.5; improvements.push({ id: "sitemap", title: "Sitemap XML absent", description: "Aide à l'indexation.", severity: "warning", category: "Éthique & Risque" }); }
+  if (llmsExists) ethicsScore += 0.3;
+
+  if (metaRobots.includes("noindex")) { ethicsScore -= 2; improvements.push({ id: "noindex", title: "Page noindex", description: "Non indexable.", severity: "critical", category: "Éthique & Risque" }); }
+  if (metaRobots.includes("noai") || metaRobots.includes("noimageai")) { ethicsScore -= 1.5; improvements.push({ id: "noai", title: "Directive noai", description: "Contenu exclu du traitement IA.", severity: "warning", category: "Éthique & Risque" }); }
+  if (metaRobots.includes("nosnippet")) { ethicsScore -= 0.5; improvements.push({ id: "nosnippet", title: "Directive nosnippet", description: "Pas d'extraits autorisés.", severity: "info", category: "Éthique & Risque" }); }
+
+  // ── AI-Generated Detection ──
   const hasStructuredData = $('script[type="application/ld+json"]').length > 0;
+  const textContent = mainClean;
+  const sentences = textContent.split(/[.!?]+/).filter(s => s.trim().length > 10);
+  const wordCount = textContent.split(/\s+/).filter(w => w.length > 0).length;
+
+  // Repetition patterns
+  if (sentences.length > 5) {
+    const sentenceSet = new Set(sentences.map(s => s.trim().toLowerCase()));
+    const repetitionRatio = 1 - (sentenceSet.size / sentences.length);
+    if (repetitionRatio > 0.3) { aiGeneratedScore -= 2; improvements.push({ id: "ai-repetition", title: "Contenu répétitif détecté", description: `${Math.round(repetitionRatio * 100)}% phrases dupliquées.`, severity: "warning", category: "Détection IA" }); }
+    else if (repetitionRatio > 0.15) { aiGeneratedScore -= 1; improvements.push({ id: "ai-repetition", title: "Légère répétition", description: `${Math.round(repetitionRatio * 100)}% phrases similaires.`, severity: "info", category: "Détection IA" }); }
+  }
+
+  // Sentence length uniformity
+  if (sentences.length > 5) {
+    const lengths = sentences.map(s => s.trim().split(/\s+/).length);
+    const avgLen = lengths.reduce((a, b) => a + b, 0) / lengths.length;
+    const variance = lengths.reduce((sum, l) => sum + Math.pow(l - avgLen, 2), 0) / lengths.length;
+    const coeffVariation = avgLen > 0 ? Math.sqrt(variance) / avgLen : 1;
+    if (coeffVariation < 0.2) { aiGeneratedScore -= 2; improvements.push({ id: "ai-uniformity", title: "Phrases très uniformes", description: "Longueur de phrases homogène typique d'IA.", severity: "warning", category: "Détection IA" }); }
+    else if (coeffVariation < 0.35) { aiGeneratedScore -= 1; improvements.push({ id: "ai-uniformity", title: "Phrases assez uniformes", description: "Faible variation de longueur.", severity: "info", category: "Détection IA" }); }
+  }
+
+  // AI typical phrases
+  const aiPatterns = [
+    /\ben conclusion\b/gi, /\bil est important de noter\b/gi, /\bil convient de\b/gi,
+    /\bin conclusion\b/gi, /\bit is important to note\b/gi, /\bit's worth noting\b/gi,
+    /\bfurthermore\b/gi, /\bmoreover\b/gi, /\badditionally\b/gi,
+    /\ben résumé\b/gi, /\bde plus\b/gi, /\bpar ailleurs\b/gi,
+    /\bin today's world\b/gi, /\bin the realm of\b/gi,
+    /\bdelve\b/gi, /\btapestry\b/gi, /\blandscape\b/gi,
+  ];
+  let aiPhraseCount = 0;
+  for (const pattern of aiPatterns) { const m = textContent.match(pattern); if (m) aiPhraseCount += m.length; }
+  const aiPhraseDensity = wordCount > 0 ? aiPhraseCount / (wordCount / 100) : 0;
+  if (aiPhraseDensity > 3) { aiGeneratedScore -= 2; improvements.push({ id: "ai-phrases", title: "Formulations typiques IA", description: `${aiPhraseCount} formulations IA détectées.`, severity: "warning", category: "Détection IA" }); }
+  else if (aiPhraseDensity > 1.5) { aiGeneratedScore -= 1; improvements.push({ id: "ai-phrases", title: "Formulations IA détectées", description: `${aiPhraseCount} expressions IA.`, severity: "info", category: "Détection IA" }); }
+
+  // Personal voice
+  const personalPatterns = [/\bje\b/gi, /\bmon\b/gi, /\bma\b/gi, /\bmes\b/gi, /\bnous\b/gi, /\bnotre\b/gi, /\bI\b/g, /\bmy\b/gi, /\bwe\b/gi, /\bour\b/gi];
+  let personalCount = 0;
+  for (const p of personalPatterns) { const m = textContent.match(p); if (m) personalCount += m.length; }
+  if (wordCount > 100 && personalCount === 0) { aiGeneratedScore -= 1; improvements.push({ id: "ai-impersonal", title: "Contenu impersonnel", description: "Aucune voix personnelle détectée.", severity: "info", category: "Détection IA" }); }
+
+  // Positive signals
+  if (hasStructuredData) aiGeneratedScore += 0.5;
+  const hasAuthorMeta = !!($('meta[name="author"]').attr("content")?.trim());
+  if (hasAuthorMeta) aiGeneratedScore += 0.3;
+  else if (wordCount > 200) { aiGeneratedScore -= 0.5; improvements.push({ id: "ai-no-author", title: "Pas d'auteur identifié", description: "Absence de meta author.", severity: "info", category: "Détection IA" }); }
+
+  // ── LLM-based analysis (blends with heuristic scores) ──
+  const llmResult = await analyzWithLLM(mainClean, title, lang, targetUrl);
+  if (llmResult) {
+    // Blend: 40% heuristic + 60% LLM for more accurate scoring
+    ethicsScore = ethicsScore * 0.4 + llmResult.ethicsScore * 0.6;
+    coherenceScore = coherenceScore * 0.4 + llmResult.coherenceScore * 0.6;
+    aiGeneratedScore = aiGeneratedScore * 0.4 + llmResult.aiGeneratedScore * 0.6;
+
+    // Add LLM-sourced improvements
+    for (const imp of llmResult.ethicsImprovements) {
+      improvements.push({ id: `llm-ethics-${improvements.length}`, title: imp.title, description: imp.description, severity: imp.severity, category: "Éthique & Risque" });
+    }
+    for (const imp of llmResult.coherenceImprovements) {
+      improvements.push({ id: `llm-coherence-${improvements.length}`, title: imp.title, description: imp.description, severity: imp.severity, category: "Cohérence" });
+    }
+    for (const imp of llmResult.aiDetectionImprovements) {
+      improvements.push({ id: `llm-ai-${improvements.length}`, title: imp.title, description: imp.description, severity: imp.severity, category: "Détection IA" });
+    }
+    console.log(`    -> LLM scores: Ethics=${llmResult.ethicsScore}, Coherence=${llmResult.coherenceScore}, AI=${llmResult.aiGeneratedScore}`);
+  }
+
+  // Clamp sub-scores
+  ethicsScore = Math.max(0, Math.min(10, Math.round(ethicsScore * 10) / 10));
+  coherenceScore = Math.max(0, Math.min(10, Math.round(coherenceScore * 10) / 10));
+  aiGeneratedScore = Math.max(0, Math.min(10, Math.round(aiGeneratedScore * 10) / 10));
 
   const yaml: string[] = ["# Aperçu IA", "", `url: ${escapeYaml(targetUrl)}`];
   yaml.push(`title: ${title ? escapeYaml(title) : "null"}`);
   yaml.push(`description: ${metaDesc ? escapeYaml(metaDesc.slice(0, 200)) : "null"}`);
   yaml.push(`lang: ${lang || "null"}`);
-  yaml.push(`score: ${Math.max(0, Math.min(10, Math.round(score * 10) / 10))}/10`);
+
+  const finalScore = Math.max(0, Math.min(10, Math.round(((ethicsScore + coherenceScore + aiGeneratedScore) / 3) * 10) / 10));
+
+  yaml.push(`score: ${finalScore}/10`);
+  yaml.push(`ethicsScore: ${ethicsScore}/10`);
+  yaml.push(`coherenceScore: ${coherenceScore}/10`);
+  yaml.push(`aiGeneratedScore: ${aiGeneratedScore}/10`);
   yaml.push(`structuredData: ${hasStructuredData}`);
   yaml.push(`robotsTxt: ${robotsExists}`);
   yaml.push(`sitemap: ${sitemapExists}`);
   yaml.push(`llmsTxt: ${llmsExists}`);
 
-  const finalScore = Math.max(0, Math.min(10, Math.round(score * 10) / 10));
-
   return {
     score: finalScore,
     maxScore: 10,
+    ethicsScore,
+    coherenceScore,
+    aiGeneratedScore,
     details: {
       improvements,
       aiPreviewYaml: yaml.join("\n"),
@@ -220,7 +433,7 @@ async function analyzeUrl(targetUrl: string) {
         robotsTxt: { exists: robotsExists, blocksAI },
         sitemap: { exists: sitemapExists },
         llmsTxt: { exists: llmsExists },
-        metaRobots: { noindex: metaRobots.includes("noindex"), nofollow: metaRobots.includes("nofollow"), nosnippet: metaRobots.includes("nosnippet"), noai: metaRobots.includes("noai") },
+        metaRobots: { noindex: metaRobots.includes("noindex"), nofollow: metaRobots.includes("nofollow"), nosnippet: metaRobots.includes("nosnippet"), noai: metaRobots.includes("noai") || metaRobots.includes("noimageai") },
       },
       analyzedAt: new Date().toISOString(),
     },
@@ -241,8 +454,7 @@ async function processAIAnalysis() {
   let analyzed = 0;
   for (const site of sites) {
     const lastAnalysis = site.analyses[0]?.createdAt;
-    const frequencyMs = getFrequencyMs(site.frequency);
-    const isDue = !lastAnalysis || (now.getTime() - lastAnalysis.getTime() > frequencyMs);
+    const isDue = !lastAnalysis || (now.getTime() - lastAnalysis.getTime() > AI_CHECK_INTERVAL_MS);
 
     if (!isDue) continue;
 
@@ -254,11 +466,14 @@ async function processAIAnalysis() {
           siteId: site.id,
           score: result.score,
           maxScore: result.maxScore,
+          ethicsScore: result.ethicsScore,
+          coherenceScore: result.coherenceScore,
+          aiGeneratedScore: result.aiGeneratedScore,
           details: JSON.parse(JSON.stringify(result.details)),
         },
       });
       analyzed++;
-      console.log(`    -> AI Score: ${result.score}/10`);
+      console.log(`    -> AI Score: ${result.score}/10 (Ethics: ${result.ethicsScore}, Coherence: ${result.coherenceScore}, AI Detection: ${result.aiGeneratedScore})`);
     } catch (err) {
       console.error(`    -> AI Error: ${err instanceof Error ? err.message : err}`);
     }
@@ -951,6 +1166,7 @@ async function main() {
   console.log(`  Availability check interval: ${AVAILABILITY_INTERVAL_MS / 1000}s`);
   console.log(`  Security scan interval: ${SECURITY_INTERVAL_MS / 1000}s`);
   console.log(`  Retention: ${RETENTION_DAYS} days`);
+  console.log(`  LLM analysis: ${LLM_ENABLED ? `enabled (${VLLM_API_URL}, model: ${VLLM_MODEL})` : "disabled (heuristic only)"}`);
 
   // Run all once at startup
   await Promise.allSettled([

@@ -10,16 +10,16 @@ export { LOCALES, DEFAULT_LOCALE } from "./types";
 const dictionaries: Record<Locale, Dictionary> = { en, fr, es, de };
 
 export function getDictionary(locale: Locale): Dictionary {
-  return dictionaries[locale] || dictionaries.en;
+  return dictionaries[locale] || dictionaries.fr;
 }
 
 /** Map html lang code to our locale */
 export function detectLocale(acceptLanguage?: string): Locale {
-  if (!acceptLanguage) return "en";
+  if (!acceptLanguage) return "fr";
   const langs = acceptLanguage.split(",").map((l) => l.split(";")[0].trim().toLowerCase());
   for (const lang of langs) {
     const code = lang.split("-")[0];
     if (code in dictionaries) return code as Locale;
   }
-  return "en";
+  return "fr";
 }

@@ -7,7 +7,7 @@ export const LOCALES: { code: Locale; label: string; flag: string }[] = [
   { code: "de", label: "Deutsch", flag: "🇩🇪" },
 ];
 
-export const DEFAULT_LOCALE: Locale = "en";
+export const DEFAULT_LOCALE: Locale = "fr";
 
 export interface Dictionary {
   // Common
@@ -132,6 +132,24 @@ export interface Dictionary {
       apiKeys: string;
     };
     signOut: string;
+    scoreHistory: string;
+    overviewSubtitle: string;
+    noSitesTitle: string;
+    noSitesDescription: string;
+    addFirstSite: string;
+    aiScore: string;
+    availabilityScore: string;
+    securityScore: string;
+    notScanned: string;
+    lastCheck: string;
+    viewDetails: string;
+    runAll: string;
+    globalHealth: string;
+    siteHealth: string;
+    httpStatus: string;
+    responseTime: string;
+    overallScore: string;
+    manageSites: string;
   };
 
   // API Keys

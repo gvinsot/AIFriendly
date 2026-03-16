@@ -24,7 +24,6 @@ export async function GET(_req: NextRequest, context: RouteContext) {
     id: site.id,
     name: site.name,
     url: site.url,
-    frequency: site.frequency,
     isActive: site.isActive,
     availabilityEnabled: site.availabilityEnabled,
     securityEnabled: site.securityEnabled,
@@ -47,14 +46,12 @@ export async function PUT(request: NextRequest, context: RouteContext) {
   }
 
   const body = await request.json();
-  const { name, url, frequency, isActive } = body as {
+  const { name, url, isActive } = body as {
     name?: string;
     url?: string;
-    frequency?: string;
     isActive?: boolean;
   };
 
-  const validFrequencies = ["6h", "daily", "weekly", "monthly"];
   const data: Record<string, unknown> = {};
   if (name?.trim()) data.name = name.trim();
   if (url?.trim()) {
@@ -63,9 +60,6 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       normalizedUrl = `https://${normalizedUrl}`;
     }
     data.url = normalizedUrl;
-  }
-  if (frequency && validFrequencies.includes(frequency)) {
-    data.frequency = frequency;
   }
   if (typeof isActive === "boolean") data.isActive = isActive;
 

@@ -8,7 +8,6 @@ interface Site {
   id: string;
   name: string;
   url: string;
-  frequency: string;
   isActive: boolean;
   createdAt: string;
   _count: { analyses: number };
@@ -24,7 +23,6 @@ export default function SitesPage() {
   const [formData, setFormData] = useState({
     name: "",
     url: "",
-    frequency: "daily",
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -64,7 +62,7 @@ export default function SitesPage() {
       }
       setShowForm(false);
       setEditingSite(null);
-      setFormData({ name: "", url: "", frequency: "daily" });
+      setFormData({ name: "", url: "" });
       fetchSites();
     } catch {
       setError(t.common.connectionError);
@@ -81,7 +79,7 @@ export default function SitesPage() {
 
   function startEdit(site: Site) {
     setEditingSite(site);
-    setFormData({ name: site.name, url: site.url, frequency: site.frequency });
+    setFormData({ name: site.name, url: site.url });
     setShowForm(true);
     setError(null);
   }
@@ -89,7 +87,7 @@ export default function SitesPage() {
   function cancelForm() {
     setShowForm(false);
     setEditingSite(null);
-    setFormData({ name: "", url: "", frequency: "daily" });
+    setFormData({ name: "", url: "" });
     setError(null);
   }
 
@@ -117,7 +115,7 @@ export default function SitesPage() {
             onClick={() => {
               setShowForm(true);
               setEditingSite(null);
-              setFormData({ name: "", url: "", frequency: "daily" });
+              setFormData({ name: "", url: "" });
             }}
             className="rounded-lg border border-luxe-gold bg-luxe-gold/10 text-luxe-gold px-5 py-2.5 text-sm font-medium hover:bg-luxe-gold/20 transition-colors"
           >
@@ -171,24 +169,6 @@ export default function SitesPage() {
                 className="w-full rounded-lg border border-luxe-border bg-luxe-bg px-4 py-2.5 text-sm text-luxe-fg placeholder-luxe-fg-muted/70 focus:outline-none focus:ring-1 focus:ring-luxe-border-focus"
               />
             </div>
-          </div>
-
-          <div>
-            <label className="block text-xs text-luxe-fg-muted mb-1.5">
-              {t.sites.analysisFrequency}
-            </label>
-            <select
-              value={formData.frequency}
-              onChange={(e) =>
-                setFormData({ ...formData, frequency: e.target.value })
-              }
-              className="w-full sm:w-auto rounded-lg border border-luxe-border bg-luxe-bg px-4 py-2.5 text-sm text-luxe-fg focus:outline-none focus:ring-1 focus:ring-luxe-border-focus"
-            >
-              <option value="6h">{t.sites.frequencyOptions["6h"]}</option>
-              <option value="daily">{t.sites.frequencyOptions.daily}</option>
-              <option value="weekly">{t.sites.frequencyOptions.weekly}</option>
-              <option value="monthly">{t.sites.frequencyOptions.monthly}</option>
-            </select>
           </div>
 
           <div className="flex items-center gap-3 pt-2">
@@ -245,8 +225,6 @@ export default function SitesPage() {
                   {site.url}
                 </p>
                 <div className="flex items-center gap-3 mt-2 text-xs text-luxe-fg-muted">
-                  <span>{t.common.frequency[site.frequency as keyof typeof t.common.frequency] || site.frequency}</span>
-                  <span>&middot;</span>
                   <span>{t.sites.analysisCount(site._count.analyses)}</span>
                 </div>
               </div>

@@ -20,21 +20,15 @@ export function DashboardNav({ user }: DashboardNavProps) {
 
   return (
     <header className="border-b border-luxe-border bg-luxe-bg-elevated/80 backdrop-blur-sm sticky top-0 z-50">
-      <div className="max-w-5xl mx-auto px-6 flex items-center justify-between h-16">
+      <div className="max-w-7xl mx-auto px-6 flex items-center justify-between h-16">
         <div className="flex items-center gap-8">
           <Link href="/" className="font-display text-xl font-bold tracking-tight">
             <span className="title-gradient title-glow">AI</span>
             <span className="text-luxe-fg"> Friendly</span>
           </Link>
           <nav className="flex items-center gap-1">
-            <NavLink href="/dashboard" active={pathname === "/dashboard"}>
+            <NavLink href="/dashboard" active={pathname === "/dashboard" || pathname.startsWith("/dashboard/sites")}>
               {t.dashboard.nav.dashboard}
-            </NavLink>
-            <NavLink
-              href="/dashboard/sites"
-              active={pathname.startsWith("/dashboard/sites")}
-            >
-              {t.dashboard.nav.mySites}
             </NavLink>
             <NavLink
               href="/dashboard/api-keys"

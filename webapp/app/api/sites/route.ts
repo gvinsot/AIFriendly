@@ -22,11 +22,10 @@ export async function GET() {
     },
   });
 
-  const result = sites.map((s) => ({
+  const result = sites.map((s: typeof sites[number]) => ({
     id: s.id,
     name: s.name,
     url: s.url,
-    frequency: s.frequency,
     isActive: s.isActive,
     createdAt: s.createdAt.toISOString(),
     _count: s._count,
@@ -44,10 +43,9 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json();
-  const { name, url, frequency } = body as {
+  const { name, url } = body as {
     name?: string;
     url?: string;
-    frequency?: string;
   };
 
   if (!name?.trim() || !url?.trim()) {
@@ -56,11 +54,6 @@ export async function POST(request: Request) {
       { status: 400 }
     );
   }
-
-  const validFrequencies = ["6h", "daily", "weekly", "monthly"];
-  const freq = validFrequencies.includes(frequency || "")
-    ? frequency!
-    : "daily";
 
   // Limit to 20 sites per user
   const count = await prisma.site.count({
@@ -83,7 +76,6 @@ export async function POST(request: Request) {
       userId: session.user.id,
       name: name.trim(),
       url: normalizedUrl,
-      frequency: freq,
     },
   });
 

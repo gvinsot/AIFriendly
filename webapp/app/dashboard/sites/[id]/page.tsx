@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import type { Improvement } from "@/lib/types";
 import { useI18n } from "@/lib/i18n/context";
@@ -12,7 +12,6 @@ interface SiteInfo {
   id: string;
   name: string;
   url: string;
-  frequency: string;
   isActive: boolean;
 }
 
@@ -262,13 +261,17 @@ function LineChart({
 
 export default function SiteDetailPage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const siteId = params.id as string;
   const { t, locale } = useI18n();
 
   const dateLocale = locale === "fr" ? "fr-FR" : locale === "es" ? "es-ES" : locale === "de" ? "de-DE" : "en-US";
 
+  const tabParam = searchParams.get("tab");
+  const initialTab: TabId = tabParam === "ai" || tabParam === "availability" || tabParam === "security" ? tabParam : "availability";
+
   const [site, setSite] = useState<SiteInfo | null>(null);
-  const [activeTab, setActiveTab] = useState<TabId>("ai");
+  const [activeTab, setActiveTab] = useState<TabId>(initialTab);
   const [loading, setLoading] = useState(true);
 
   // AI state
@@ -386,7 +389,7 @@ export default function SiteDetailPage() {
     return (
       <div className="text-center py-20">
         <p className="text-luxe-fg-muted">{t.siteDetail.siteNotFound}</p>
-        <Link href="/dashboard/sites" className="text-sm text-luxe-gold hover:underline mt-2 inline-block">&larr; {t.common.back}</Link>
+        <Link href="/dashboard" className="text-sm text-luxe-gold hover:underline mt-2 inline-block">&larr; {t.dashboard.nav.dashboard}</Link>
       </div>
     );
   }
@@ -396,10 +399,9 @@ export default function SiteDetailPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <Link href="/dashboard/sites" className="text-xs text-luxe-fg-muted hover:text-luxe-gold transition-colors">&larr; {t.siteDetail.mySites}</Link>
+          <Link href="/dashboard" className="text-xs text-luxe-fg-muted hover:text-luxe-gold transition-colors">&larr; {t.dashboard.nav.dashboard}</Link>
           <h1 className="font-display text-2xl font-semibold text-luxe-fg mt-1">{site.name}</h1>
           <p className="text-sm text-luxe-fg-muted mt-0.5">{site.url}</p>
-          <p className="text-xs text-luxe-fg-muted mt-1">{t.siteDetail.analysisLabel} {t.common.frequency[site.frequency as keyof typeof t.common.frequency]?.toLowerCase() || site.frequency}</p>
         </div>
       </div>
 
@@ -466,7 +468,14 @@ function AITab({ analyses, selectedAnalysis, analyzing, loadingDetail, onAnalyze
         <ActionButton loading={analyzing} onClick={onAnalyze} label={t.siteDetail.ai.analyzeButton} loadingLabel={t.siteDetail.ai.analyzingButton} />
       </div>
 
-      <ScoreChart entries={analyses} onClickEntry={onViewDetail} title={t.siteDetail.ai.scoreEvolution} />
+      <LineChart
+        title={t.siteDetail.ai.scoreEvolution}
+        yMax={10}
+        series={[
+          { label: t.common.score, color: "#F59E0B", data: analyses.map(a => ({ id: a.id, value: a.score, date: a.createdAt })) },
+        ]}
+        onClickPoint={onViewDetail}
+      />
 
       <HistoryList
         items={analyses}
@@ -542,8 +551,6 @@ function AvailabilityTab({ checks, selectedCheck, checking, loadingDetail, onChe
           <MiniStat label={t.siteDetail.availability.loadTime} value={checks[0].loadTimeMs !== null ? `${(checks[0].loadTimeMs / 1000).toFixed(1)}s` : "—"} />
         </div>
       )}
-
-      <ScoreChart entries={checks.map(c => ({ id: c.id, score: c.score, createdAt: c.createdAt }))} onClickEntry={onViewDetail} title={t.siteDetail.availability.scoreTrend} />
 
       <LineChart
         title={t.siteDetail.availability.scoreTrend}
@@ -672,8 +679,6 @@ function SecurityTab({ scans, selectedScan, scanning, loadingDetail, onScan, onV
           <MiniStat label={t.siteDetail.security.injection} value={<ScoreBadge score={scans[0].injectionScore} size="sm" />} />
         </div>
       )}
-
-      <ScoreChart entries={scans.map(s => ({ id: s.id, score: s.score, createdAt: s.createdAt }))} onClickEntry={onViewDetail} title={t.siteDetail.security.scoreTrend} />
 
       {scans.length > 0 && (
         <LineChart
