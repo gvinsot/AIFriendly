@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
       break;
     }
 
-    case "invoice_payment.paid": {
+    case "invoice_payment.paid" as string: {
       // Stripe API 2026+ sends invoice_payment.paid instead of invoice.payment_succeeded
       const invoicePayment = event.data.object as { invoice: string };
       const invoice = await stripe.invoices.retrieve(invoicePayment.invoice);
