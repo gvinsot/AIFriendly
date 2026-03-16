@@ -1160,41 +1160,38 @@ async function cleanupOldData() {
 // MAIN — 3 PARALLEL LOOPS
 // ═══════════════════════════════════════════════════════════════
 
+/**
+ * Creates a named loop that waits for the task to complete before scheduling
+ * the next run. Prevents overlapping executions that cause resource exhaustion.
+ */
+function startLoop(name: string, intervalMs: number, task: () => Promise<void>): void {
+  const run = async () => {
+    while (true) {
+      try {
+        await task();
+      } catch (err) {
+        console.error(`[${name}] Loop error:`, err);
+      }
+      await new Promise((r) => setTimeout(r, intervalMs));
+    }
+  };
+  run();
+}
+
 async function main() {
-  console.log("AI Friendly Worker started (v3.0 — multi-task).");
+  console.log("AI Friendly Worker started (v3.1 — sequential loops).");
   console.log(`  AI analysis interval: ${AI_CHECK_INTERVAL_MS / 1000}s`);
   console.log(`  Availability check interval: ${AVAILABILITY_INTERVAL_MS / 1000}s`);
   console.log(`  Security scan interval: ${SECURITY_INTERVAL_MS / 1000}s`);
   console.log(`  Retention: ${RETENTION_DAYS} days`);
   console.log(`  LLM analysis: ${LLM_ENABLED ? `enabled (${VLLM_API_URL}, model: ${VLLM_MODEL})` : "disabled (heuristic only)"}`);
 
-  // Run all once at startup
-  await Promise.allSettled([
-    processAIAnalysis(),
-    processAvailabilityChecks(),
-    processSecurityScans(),
-    cleanupOldData(),
-  ]);
-
-  // Loop 1: AI Analysis (every 5 min)
-  setInterval(async () => {
-    try { await processAIAnalysis(); } catch (err) { console.error("[AI] Loop error:", err); }
-  }, AI_CHECK_INTERVAL_MS);
-
-  // Loop 2: Availability (every 1 min)
-  setInterval(async () => {
-    try { await processAvailabilityChecks(); } catch (err) { console.error("[AVAIL] Loop error:", err); }
-  }, AVAILABILITY_INTERVAL_MS);
-
-  // Loop 3: Security (every 1 hour)
-  setInterval(async () => {
-    try { await processSecurityScans(); } catch (err) { console.error("[SEC] Loop error:", err); }
-  }, SECURITY_INTERVAL_MS);
-
-  // Cleanup (every 1 hour)
-  setInterval(async () => {
-    try { await cleanupOldData(); } catch (err) { console.error("[Cleanup] Error:", err); }
-  }, CLEANUP_INTERVAL_MS);
+  // Each loop waits for the previous run to finish before sleeping then re-running.
+  // No overlap possible within a single loop.
+  startLoop("AI",      AI_CHECK_INTERVAL_MS,    processAIAnalysis);
+  startLoop("AVAIL",   AVAILABILITY_INTERVAL_MS, processAvailabilityChecks);
+  startLoop("SEC",     SECURITY_INTERVAL_MS,     processSecurityScans);
+  startLoop("Cleanup", CLEANUP_INTERVAL_MS,      cleanupOldData);
 }
 
 main().catch((err) => {
