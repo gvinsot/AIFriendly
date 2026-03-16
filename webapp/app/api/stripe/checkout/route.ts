@@ -1,9 +1,10 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { stripe, PRICE_ID } from "@/lib/stripe";
+import { getStripe, PRICE_ID } from "@/lib/stripe";
 import { NextResponse } from "next/server";
 
 export async function POST() {
+  const stripe = getStripe();
   const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
