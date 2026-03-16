@@ -1,7 +1,8 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
 import { useI18n } from "@/lib/i18n/context";
 
 function SubscribeContent() {
@@ -9,7 +10,28 @@ function SubscribeContent() {
   const success = searchParams.get("success");
   const canceled = searchParams.get("canceled");
   const [loading, setLoading] = useState(false);
+  const [sessionReady, setSessionReady] = useState(false);
+  const { update } = useSession();
   const { t } = useI18n();
+
+  // After successful payment, refresh the JWT so isSubscribed is updated
+  useEffect(() => {
+    if (!success) return;
+    let attempts = 0;
+    const refresh = async () => {
+      await update();
+      attempts++;
+      // Retry a few times in case the webhook hasn't processed yet
+      if (attempts < 3) {
+        setTimeout(refresh, 2000);
+      } else {
+        setSessionReady(true);
+      }
+    };
+    // Initial delay to let the webhook process
+    const timer = setTimeout(refresh, 1500);
+    return () => clearTimeout(timer);
+  }, [success, update]);
 
   const handleCheckout = async () => {
     setLoading(true);
@@ -40,10 +62,16 @@ function SubscribeContent() {
           {t.subscribe.successTitle}
         </h1>
         <p className="text-luxe-fg-muted">{t.subscribe.successMessage}</p>
+        {!sessionReady && (
+          <div className="flex items-center justify-center gap-2 text-sm text-luxe-fg-muted">
+            <div className="size-4 rounded-full border-2 border-luxe-gold border-t-transparent animate-spin" />
+            {t.subscribe.activating}
+          </div>
+        )}
         <div className="flex flex-col gap-3">
           <a
             href="/dashboard"
-            className="rounded-lg bg-luxe-gold px-6 py-3 text-sm font-semibold text-luxe-bg hover:opacity-90 transition-opacity"
+            className={`rounded-lg bg-luxe-gold px-6 py-3 text-sm font-semibold text-luxe-bg hover:opacity-90 transition-opacity ${!sessionReady ? "pointer-events-none opacity-50" : ""}`}
           >
             {t.subscribe.goToDashboard}
           </a>

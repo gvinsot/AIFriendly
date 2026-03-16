@@ -34,8 +34,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (user) {
         token.id = user.id;
       }
-      // Refresh subscription status on every sign-in or session update
-      if (user || trigger === "update") {
+      // Refresh subscription status on sign-in, explicit update, or every 5 min
+      const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
+      const lastChecked = (token.subscriptionCheckedAt as number) || 0;
+      const isStale = Date.now() - lastChecked > REFRESH_INTERVAL_MS;
+      if (user || trigger === "update" || isStale) {
         const dbUser = await prisma.user.findUnique({
           where: { id: (token.id as string) },
           select: { stripeCurrentPeriodEnd: true },
@@ -43,6 +46,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         token.isSubscribed =
           !!dbUser?.stripeCurrentPeriodEnd &&
           dbUser.stripeCurrentPeriodEnd.getTime() > Date.now();
+        token.subscriptionCheckedAt = Date.now();
       }
       return token;
     },

@@ -294,6 +294,7 @@ const es: Dictionary = {
     checkoutButton: "Suscribirse — 10 €/mes",
     successTitle: "¡Suscripción activa!",
     successMessage: "Tu cuenta está activa. Tienes acceso completo a la plataforma.",
+    activating: "Activando tu suscripción…",
     goToDashboard: "Ir al panel",
     manageBilling: "Gestionar facturación",
     canceledTitle: "Pago cancelado",

@@ -294,6 +294,7 @@ const fr: Dictionary = {
     checkoutButton: "S'abonner — 10 €/mois",
     successTitle: "Abonnement activé !",
     successMessage: "Votre compte est désormais actif. Vous avez accès à l'ensemble de la plateforme.",
+    activating: "Activation de votre abonnement…",
     goToDashboard: "Aller au tableau de bord",
     manageBilling: "Gérer la facturation",
     canceledTitle: "Paiement annulé",

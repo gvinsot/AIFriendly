@@ -282,6 +282,7 @@ export interface Dictionary {
     checkoutButton: string;
     successTitle: string;
     successMessage: string;
+    activating: string;
     goToDashboard: string;
     manageBilling: string;
     canceledTitle: string;
