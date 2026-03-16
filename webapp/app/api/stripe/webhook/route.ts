@@ -25,26 +25,31 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
   }
 
-  switch (event.type) {
-    case "checkout.session.completed": {
-      const session = event.data.object as Stripe.Checkout.Session;
-      if (session.subscription && session.customer) {
-        const subscription = await stripe.subscriptions.retrieve(
-          session.subscription as string
-        );
-        await prisma.user.update({
-          where: { stripeCustomerId: session.customer as string },
-          data: {
-            stripeSubscriptionId: subscription.id,
-            stripePriceId: subscription.items.data[0]?.price.id,
-            stripeCurrentPeriodEnd: new Date(
-              subscription.current_period_end * 1000
-            ),
-          },
-        });
+  console.log(`[Stripe Webhook] Received event: ${event.type} (${event.id})`);
+
+  try {
+    switch (event.type) {
+      case "checkout.session.completed": {
+        const session = event.data.object as Stripe.Checkout.Session;
+        console.log(`[Stripe Webhook] checkout.session.completed — customer: ${session.customer}, subscription: ${session.subscription}, payment_status: ${session.payment_status}`);
+        if (session.subscription && session.customer) {
+          const subscription = await stripe.subscriptions.retrieve(
+            session.subscription as string
+          );
+          await prisma.user.update({
+            where: { stripeCustomerId: session.customer as string },
+            data: {
+              stripeSubscriptionId: subscription.id,
+              stripePriceId: subscription.items.data[0]?.price.id,
+              stripeCurrentPeriodEnd: new Date(
+                subscription.current_period_end * 1000
+              ),
+            },
+          });
+          console.log(`[Stripe Webhook] User updated for customer ${session.customer}`);
+        }
+        break;
       }
-      break;
-    }
 
     case "invoice.payment_succeeded": {
       const invoice = event.data.object as Stripe.Invoice;
@@ -61,6 +66,29 @@ export async function POST(req: NextRequest) {
             ),
           },
         });
+      }
+      break;
+    }
+
+    case "invoice_payment.paid": {
+      // Stripe API 2026+ sends invoice_payment.paid instead of invoice.payment_succeeded
+      const invoicePayment = event.data.object as { invoice: string };
+      const invoice = await stripe.invoices.retrieve(invoicePayment.invoice);
+      if (invoice.subscription) {
+        const subscription = await stripe.subscriptions.retrieve(
+          invoice.subscription as string
+        );
+        await prisma.user.update({
+          where: { stripeCustomerId: invoice.customer as string },
+          data: {
+            stripeSubscriptionId: subscription.id,
+            stripePriceId: subscription.items.data[0]?.price.id,
+            stripeCurrentPeriodEnd: new Date(
+              subscription.current_period_end * 1000
+            ),
+          },
+        });
+        console.log(`[Stripe Webhook] invoice_payment.paid — updated user for customer ${invoice.customer}`);
       }
       break;
     }
@@ -91,6 +119,13 @@ export async function POST(req: NextRequest) {
       });
       break;
     }
+
+    default:
+      console.warn(`[Stripe Webhook] Unhandled event type: ${event.type} (${event.id})`);
+  }
+  } catch (err) {
+    console.error(`[Stripe Webhook] Error processing ${event.type}:`, err);
+    return NextResponse.json({ error: "Webhook processing failed" }, { status: 500 });
   }
 
   return NextResponse.json({ received: true });

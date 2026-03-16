@@ -14,24 +14,33 @@ function SubscribeContent() {
   const { update } = useSession();
   const { t } = useI18n();
 
-  // After successful payment, refresh the JWT so isSubscribed is updated
+  // After successful payment, activate subscription via API then refresh JWT
   useEffect(() => {
     if (!success) return;
-    let attempts = 0;
-    const refresh = async () => {
-      await update();
-      attempts++;
-      // Retry a few times in case the webhook hasn't processed yet
-      if (attempts < 3) {
-        setTimeout(refresh, 2000);
-      } else {
-        setSessionReady(true);
+    const sessionId = searchParams.get("session_id");
+    let cancelled = false;
+
+    const activate = async () => {
+      // Call activate endpoint to write subscription data to DB
+      if (sessionId) {
+        try {
+          await fetch("/api/stripe/activate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ sessionId }),
+          });
+        } catch (e) {
+          console.error("Activation error:", e);
+        }
       }
+      // Refresh the JWT so isSubscribed picks up the new data
+      await update();
+      if (!cancelled) setSessionReady(true);
     };
-    // Initial delay to let the webhook process
-    const timer = setTimeout(refresh, 1500);
-    return () => clearTimeout(timer);
-  }, [success, update]);
+
+    activate();
+    return () => { cancelled = true; };
+  }, [success, searchParams, update]);
 
   const handleCheckout = async () => {
     setLoading(true);
