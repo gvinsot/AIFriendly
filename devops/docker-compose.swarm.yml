@@ -19,6 +19,9 @@ services:
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
       - MICROSOFT_CLIENT_ID=${MICROSOFT_CLIENT_ID}
       - MICROSOFT_CLIENT_SECRET=${MICROSOFT_CLIENT_SECRET}
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
+      - STRIPE_PRICE_ID=${STRIPE_PRICE_ID}
       - VLLM_API_URL=${VLLM_API_URL:-}
       - VLLM_API_KEY=${VLLM_API_KEY:-}
       - VLLM_MODEL=${VLLM_MODEL:-default}
@@ -39,6 +42,12 @@ services:
         - "traefik.http.routers.ai-friendly-auth.tls.certresolver=letsencrypt"
         - "traefik.http.routers.ai-friendly-auth.priority=100"
         - "traefik.http.routers.ai-friendly-auth.service=ai-friendly"
+        # Router Stripe webhook (sans WAF) — priorité haute pour signature verification
+        - "traefik.http.routers.ai-friendly-stripe.rule=Host(`${TRAEFIK_HOST}`) && PathPrefix(`/api/stripe/webhook`)"
+        - "traefik.http.routers.ai-friendly-stripe.entrypoints=websecure"
+        - "traefik.http.routers.ai-friendly-stripe.tls.certresolver=letsencrypt"
+        - "traefik.http.routers.ai-friendly-stripe.priority=100"
+        - "traefik.http.routers.ai-friendly-stripe.service=ai-friendly"
         # Router HTTPS (principal) — middleware global obligatoire (WAF, headers, rate limit)
         - "traefik.http.routers.ai-friendly.rule=Host(`${TRAEFIK_HOST}`)"
         - "traefik.http.routers.ai-friendly.entrypoints=websecure"
