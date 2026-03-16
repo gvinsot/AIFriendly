@@ -41,7 +41,7 @@ const de: Dictionary = {
     // Hero
     heroHeadline: "Schluss mit blindem Deployment. Alles überwachen.",
     heroSubheadline: "Verfügbarkeit, Sicherheit, KI-Zugänglichkeit — eine Plattform führt alle externen Tests in Echtzeit durch. Ihre KI-Agenten beheben Probleme automatisch via MCP.",
-    heroCta: "Kostenlos testen",
+    heroCta: "Jetzt starten",
     heroSecondaryCta: "So funktioniert's",
     // Analyze form
     urlPlaceholder: "https://beispiel.de",
@@ -95,8 +95,8 @@ const de: Dictionary = {
     ],
     // CTA
     ctaTitle: "Schluss mit Raten. Anfangen zu überwachen.",
-    ctaSubtitle: "Kostenlos starten. Keine Kreditkarte erforderlich.",
-    ctaButton: "Kostenloses Konto erstellen",
+    ctaSubtitle: "10 €/Monat — bis zu 50 Websites überwachen.",
+    ctaButton: "Jetzt abonnieren",
     // Footer
     footerTool: "Die Monitoring-Plattform für Vibe Coders",
     footerSeo: "Verfügbarkeit, Sicherheit, KI-Zugänglichkeit — kontinuierliche externe Tests für moderne Entwickler. Mit integriertem MCP für automatische Korrekturen.",

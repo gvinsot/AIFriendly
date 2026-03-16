@@ -41,7 +41,7 @@ const fr: Dictionary = {
     // Hero
     heroHeadline: "Arrêtez de shipper à l'aveugle. Monitorez tout.",
     heroSubheadline: "Disponibilité, sécurité, accessibilité IA — une seule plateforme exécute tous vos tests externes en temps réel. Vos agents IA corrigent automatiquement via MCP.",
-    heroCta: "Essayer gratuitement",
+    heroCta: "Commencer",
     heroSecondaryCta: "Voir comment ça marche",
     // Analyze form
     urlPlaceholder: "https://exemple.com",
@@ -95,8 +95,8 @@ const fr: Dictionary = {
     ],
     // CTA
     ctaTitle: "Arrêtez de deviner. Commencez à monitorer.",
-    ctaSubtitle: "Gratuit pour commencer. Pas de carte bancaire requise.",
-    ctaButton: "Créer votre compte gratuit",
+    ctaSubtitle: "10 €/mois — monitorez jusqu'à 50 sites.",
+    ctaButton: "S'abonner",
     // Footer
     footerTool: "La plateforme de monitoring pour les vibe coders",
     footerSeo: "Disponibilité, sécurité, accessibilité IA — tests externes continus pour les développeurs modernes. Avec MCP intégré pour les corrections automatiques.",

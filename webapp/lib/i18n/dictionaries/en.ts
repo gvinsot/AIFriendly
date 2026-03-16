@@ -41,7 +41,7 @@ const en: Dictionary = {
     // Hero
     heroHeadline: "Stop shipping blind. Monitor everything.",
     heroSubheadline: "Availability, security, AI accessibility — one platform runs all your external tests in real time. Your AI agents auto-fix issues via MCP.",
-    heroCta: "Try it free",
+    heroCta: "Get started",
     heroSecondaryCta: "See how it works",
     // Analyze form
     urlPlaceholder: "https://example.com",
@@ -95,8 +95,8 @@ const en: Dictionary = {
     ],
     // CTA
     ctaTitle: "Stop guessing. Start monitoring.",
-    ctaSubtitle: "Free to start. No credit card required.",
-    ctaButton: "Create your free account",
+    ctaSubtitle: "10 €/month — monitor up to 50 sites.",
+    ctaButton: "Subscribe now",
     // Footer
     footerTool: "The monitoring platform for vibe coders",
     footerSeo: "Availability, security, AI accessibility — continuous external testing for modern developers. With built-in MCP for agentic auto-fixes.",
