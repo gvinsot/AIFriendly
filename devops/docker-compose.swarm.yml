@@ -19,6 +19,9 @@ services:
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
       - MICROSOFT_CLIENT_ID=${MICROSOFT_CLIENT_ID}
       - MICROSOFT_CLIENT_SECRET=${MICROSOFT_CLIENT_SECRET}
+      - VLLM_API_URL=${VLLM_API_URL:-}
+      - VLLM_API_KEY=${VLLM_API_KEY:-}
+      - VLLM_MODEL=${VLLM_MODEL:-default}
     networks:
       - proxy
       - postgresqlcluster_internal
@@ -104,6 +107,9 @@ services:
       dockerfile: worker/Dockerfile
     environment:
       - DB_CONNECTION_STRING=${DB_CONNECTION_STRING}
+      - VLLM_API_URL=${VLLM_API_URL:-}
+      - VLLM_API_KEY=${VLLM_API_KEY:-}
+      - VLLM_MODEL=${VLLM_MODEL:-default}
     networks:
       - proxy
       - postgresqlcluster_internal
