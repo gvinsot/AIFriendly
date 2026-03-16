@@ -3,6 +3,8 @@ import * as cheerio from "cheerio";
 import type { AnalysisResult, Improvement, AIPreviewContent, BotAccessInfo } from "@/lib/types";
 import { validateAndNormalizeUrl, isUrlSafeForFetch } from "@/lib/urlSecurity";
 import { checkRateLimit } from "@/lib/rateLimit";
+import { checkAvailability } from "@/lib/availability-checker";
+import { scanSecurity } from "@/lib/security-scanner";
 
 const MAX_HTML_BYTES = 5 * 1024 * 1024; // 5 Mo max
 const FETCH_TIMEOUT_MS = 15000;
@@ -660,10 +662,27 @@ export async function POST(request: NextRequest) {
     const finalScore = Math.max(0, Math.min(maxScore, Math.round(score * 10) / 10));
     const analyzedAt = new Date().toISOString();
 
+    // Run availability & security checks in parallel (scores only, details hidden for free)
+    const [availResult, secResult] = await Promise.allSettled([
+      checkAvailability(url),
+      scanSecurity(url),
+    ]);
+
+    const availabilityScore =
+      availResult.status === "fulfilled"
+        ? Math.max(0, Math.min(10, Math.round(availResult.value.score * 10) / 10))
+        : null;
+    const securityScore =
+      secResult.status === "fulfilled"
+        ? Math.max(0, Math.min(10, Math.round(secResult.value.score * 10) / 10))
+        : null;
+
     const result: AnalysisResult = {
       url,
       score: finalScore,
       maxScore,
+      availabilityScore,
+      securityScore,
       improvements,
       aiPreview,
       aiPreviewYaml,

@@ -39,8 +39,8 @@ const en: Dictionary = {
     subtitle: "The monitoring platform built for vibe coders",
     dashboardLink: "My dashboard",
     // Hero
-    heroHeadline: "Stop shipping blind. Monitor everything.",
-    heroSubheadline: "Availability, security, AI accessibility — one platform runs all your external tests in real time. Your AI agents auto-fix issues via MCP.",
+    heroHeadline: "The first monitoring service built for Vibe Coding",
+    heroSubheadline: "Availability, security, AI accessibility — monitor everything with a single tool. Your AI agents auto-fix issues via MCP.",
     heroCta: "Get started",
     heroSecondaryCta: "See how it works",
     // Analyze form
@@ -53,6 +53,10 @@ const en: Dictionary = {
     // Results
     resultsHeading: "Analysis Results",
     scoreTitle: "AI Readability Score",
+    availabilityScore: "Availability",
+    securityScore: "Security",
+    detailsCta: "Subscribe to see detailed recommendations and AI preview",
+    detailsCtaButton: "Subscribe — 10 €/month",
     improvementsTitle: "Improvements needed",
     improvementsSubtitle: "These changes will improve AI readability",
     aiPreviewTitle: "AI Preview",
@@ -281,7 +285,7 @@ const en: Dictionary = {
     subtitle: "Unlock the full platform with a monthly subscription",
     perMonth: "per month",
     features: [
-      "Unlimited site monitoring",
+      "Monitor up to 50 sites",
       "Availability, security & AI accessibility checks",
       "Score history & trend analysis",
       "MCP API for AI agent integration",

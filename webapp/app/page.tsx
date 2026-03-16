@@ -192,23 +192,9 @@ export default function Home() {
       {/* ─── HERO ─── */}
       <section className="relative z-10 pt-20 pb-16 sm:pt-28 sm:pb-24">
         <div className="max-w-4xl mx-auto px-6 text-center">
-          <div className="inline-flex items-center gap-2 rounded-full border border-luxe-border bg-luxe-bg-elevated/80 px-4 py-1.5 text-xs text-luxe-fg-muted mb-8 animate-fade-in-up">
-            <span className="inline-block w-2 h-2 rounded-full bg-[var(--luxe-score-high)] animate-pulse" />
-            {t.home.subtitle}
-          </div>
 
           <h1 className="font-display text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight text-luxe-fg leading-[1.1] mb-6 animate-fade-in-up animation-delay-100">
-            {t.home.heroHeadline.split(".").map((part, i) =>
-              i === 0 ? (
-                <span key={i}>
-                  {part}.<br className="hidden sm:block" />
-                </span>
-              ) : (
-                <span key={i} className="title-gradient title-glow">
-                  {part.trim()}
-                </span>
-              )
-            )}
+            <span className="title-gradient title-glow">{t.home.heroHeadline}</span>
           </h1>
 
           <p className="text-lg sm:text-xl text-luxe-fg-muted max-w-2xl mx-auto mb-10 leading-relaxed animate-fade-in-up animation-delay-200">
@@ -252,11 +238,11 @@ export default function Home() {
           <div className="flex items-center justify-center gap-6 text-xs text-luxe-fg-muted animate-fade-in-up animation-delay-400">
             <span className="flex items-center gap-1.5">
               <IconCheck />
-              Free
+              10 €/month
             </span>
             <span className="flex items-center gap-1.5">
               <IconCheck />
-              No credit card
+              50 sites max
             </span>
             <span className="flex items-center gap-1.5">
               <IconCheck />
@@ -271,48 +257,51 @@ export default function Home() {
         <section className="relative z-10 max-w-3xl mx-auto px-6 pb-16 space-y-10" aria-labelledby="results-heading">
           <h2 id="results-heading" className="sr-only">{t.home.resultsHeading}</h2>
 
-          <article className="rounded-2xl bg-luxe-bg-elevated border border-luxe-border shadow-luxe overflow-hidden">
-            <div className="px-8 py-5 border-b border-luxe-border bg-luxe-bg-muted/50">
-              <h3 className="font-display text-xl font-semibold text-luxe-fg">{t.home.scoreTitle}</h3>
-              <p className="text-sm text-luxe-fg-muted mt-1 truncate max-w-full" title={result.url}>{result.url}</p>
-            </div>
-            <div className="p-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6">
-              <div className="flex items-baseline gap-2">
-                <span className={`font-display text-5xl sm:text-6xl font-semibold tabular-nums tracking-tight ${
-                  result.score >= 7 ? "text-[var(--luxe-score-high)]" : result.score >= 4 ? "text-[var(--luxe-score-mid)]" : "text-[var(--luxe-score-low)]"
-                }`}>
-                  {result.score}
-                </span>
-                <span className="text-luxe-fg-muted text-xl font-medium">/ {result.maxScore}</span>
-              </div>
-              <ShareSection result={result} />
-            </div>
-          </article>
+          {/* 3 Score Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {[
+              { label: t.home.scoreTitle, value: result.score },
+              { label: t.home.availabilityScore, value: result.availabilityScore },
+              { label: t.home.securityScore, value: result.securityScore },
+            ].map(({ label, value }) => (
+              <article key={label} className="rounded-2xl bg-luxe-bg-elevated border border-luxe-border shadow-luxe overflow-hidden">
+                <div className="px-6 py-4 border-b border-luxe-border bg-luxe-bg-muted/50">
+                  <h3 className="font-display text-sm font-semibold text-luxe-fg">{label}</h3>
+                </div>
+                <div className="p-6 text-center">
+                  {value !== null && value !== undefined ? (
+                    <div className="flex items-baseline justify-center gap-1.5">
+                      <span className={`font-display text-4xl font-semibold tabular-nums tracking-tight ${
+                        value >= 7 ? "text-[var(--luxe-score-high)]" : value >= 4 ? "text-[var(--luxe-score-mid)]" : "text-[var(--luxe-score-low)]"
+                      }`}>
+                        {value}
+                      </span>
+                      <span className="text-luxe-fg-muted text-lg font-medium">/ 10</span>
+                    </div>
+                  ) : (
+                    <span className="text-luxe-fg-muted text-sm">—</span>
+                  )}
+                </div>
+              </article>
+            ))}
+          </div>
 
-          {result.improvements.length > 0 && (
-            <article className="rounded-2xl bg-luxe-bg-elevated border border-luxe-border shadow-luxe overflow-hidden">
-              <div className="px-8 py-5 border-b border-luxe-border bg-luxe-bg-muted/50">
-                <h3 className="font-display text-xl font-semibold text-luxe-fg">{t.home.improvementsTitle}</h3>
-                <p className="text-sm text-luxe-fg-muted mt-1">{t.home.improvementsSubtitle}</p>
-              </div>
-              <ul className="divide-y divide-luxe-border">
-                {result.improvements.map((item) => (
-                  <ImprovementItem key={item.id} item={item} />
-                ))}
-              </ul>
-            </article>
-          )}
+          {/* URL + Share */}
+          <div className="rounded-2xl bg-luxe-bg-elevated border border-luxe-border shadow-luxe p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <p className="text-sm text-luxe-fg-muted truncate max-w-full" title={result.url}>{result.url}</p>
+            <ShareSection result={result} />
+          </div>
 
-          <article className="rounded-2xl bg-luxe-bg-elevated border border-luxe-border shadow-luxe overflow-hidden">
-            <div className="px-8 py-5 border-b border-luxe-border bg-luxe-bg-muted/50">
-              <h3 className="font-display text-xl font-semibold text-luxe-fg">{t.home.aiPreviewTitle}</h3>
-              <p className="text-sm text-luxe-fg-muted mt-1">{t.home.aiPreviewSubtitle}</p>
-            </div>
-            <div className="p-5 overflow-auto preview-scroll max-h-[420px] bg-luxe-bg-muted rounded-b-2xl">
-              <pre className="text-sm font-mono text-luxe-fg-muted whitespace-pre leading-relaxed">
-                {result.aiPreviewYaml}
-              </pre>
-            </div>
+          {/* Subscribe CTA — replaces detailed improvements & AI preview */}
+          <article className="rounded-2xl bg-luxe-bg-elevated border border-luxe-border shadow-luxe overflow-hidden text-center p-8 space-y-4">
+            <div className="text-3xl">🔒</div>
+            <p className="text-luxe-fg-muted text-sm max-w-md mx-auto">{t.home.detailsCta}</p>
+            <a
+              href="/auth/signin"
+              className="inline-block rounded-lg bg-luxe-gold px-6 py-3 text-sm font-semibold text-luxe-bg hover:opacity-90 transition-opacity"
+            >
+              {t.home.detailsCtaButton}
+            </a>
           </article>
         </section>
       )}

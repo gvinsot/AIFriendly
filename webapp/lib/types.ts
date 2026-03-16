@@ -76,6 +76,8 @@ export interface AnalysisResult {
   url: string;
   score: number;
   maxScore: number;
+  availabilityScore: number | null;
+  securityScore: number | null;
   improvements: Improvement[];
   aiPreview: AIPreviewContent;
   aiPreviewYaml: string;

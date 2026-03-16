@@ -39,8 +39,8 @@ const fr: Dictionary = {
     subtitle: "La plateforme de monitoring faite pour les vibe coders",
     dashboardLink: "Mon espace",
     // Hero
-    heroHeadline: "Arrêtez de shipper à l'aveugle. Monitorez tout.",
-    heroSubheadline: "Disponibilité, sécurité, accessibilité IA — une seule plateforme exécute tous vos tests externes en temps réel. Vos agents IA corrigent automatiquement via MCP.",
+    heroHeadline: "Le premier service de monitoring adapté au Vibe Coding",
+    heroSubheadline: "Disponibilité, sécurité, accessibilité IA — monitorez tout avec un outil unique. Vos agents IA corrigent automatiquement via MCP.",
     heroCta: "Commencer",
     heroSecondaryCta: "Voir comment ça marche",
     // Analyze form
@@ -53,6 +53,10 @@ const fr: Dictionary = {
     // Results
     resultsHeading: "Résultats de l'analyse",
     scoreTitle: "Score de lisibilité IA",
+    availabilityScore: "Disponibilité",
+    securityScore: "Sécurité",
+    detailsCta: "Abonnez-vous pour voir les recommandations détaillées et l'aperçu IA",
+    detailsCtaButton: "S'abonner — 10 €/mois",
     improvementsTitle: "Éléments à améliorer",
     improvementsSubtitle: "Ces modifications amélioreront la lisibilité pour les IA",
     aiPreviewTitle: "Aperçu IA",
@@ -281,7 +285,7 @@ const fr: Dictionary = {
     subtitle: "Débloquez la plateforme complète avec un abonnement mensuel",
     perMonth: "par mois",
     features: [
-      "Monitoring illimité de sites",
+      "Monitoring jusqu'à 50 sites",
       "Checks disponibilité, sécurité & accessibilité IA",
       "Historique des scores & analyse de tendances",
       "API MCP pour intégration d'agents IA",

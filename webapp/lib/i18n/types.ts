@@ -64,6 +64,10 @@ export interface Dictionary {
     // Results
     resultsHeading: string;
     scoreTitle: string;
+    availabilityScore: string;
+    securityScore: string;
+    detailsCta: string;
+    detailsCtaButton: string;
     improvementsTitle: string;
     improvementsSubtitle: string;
     aiPreviewTitle: string;

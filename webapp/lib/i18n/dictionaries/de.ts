@@ -39,8 +39,8 @@ const de: Dictionary = {
     subtitle: "Die Monitoring-Plattform für Vibe Coders",
     dashboardLink: "Mein Bereich",
     // Hero
-    heroHeadline: "Schluss mit blindem Deployment. Alles überwachen.",
-    heroSubheadline: "Verfügbarkeit, Sicherheit, KI-Zugänglichkeit — eine Plattform führt alle externen Tests in Echtzeit durch. Ihre KI-Agenten beheben Probleme automatisch via MCP.",
+    heroHeadline: "Der erste Monitoring-Dienst für Vibe Coding",
+    heroSubheadline: "Verfügbarkeit, Sicherheit, KI-Zugänglichkeit — alles mit einem einzigen Tool überwachen. Ihre KI-Agenten beheben Probleme automatisch via MCP.",
     heroCta: "Jetzt starten",
     heroSecondaryCta: "So funktioniert's",
     // Analyze form
@@ -53,6 +53,10 @@ const de: Dictionary = {
     // Results
     resultsHeading: "Analyseergebnisse",
     scoreTitle: "KI-Lesbarkeitsbewertung",
+    availabilityScore: "Verfügbarkeit",
+    securityScore: "Sicherheit",
+    detailsCta: "Abonnieren Sie, um detaillierte Empfehlungen und KI-Vorschau zu sehen",
+    detailsCtaButton: "Abonnieren — 10 €/Monat",
     improvementsTitle: "Verbesserungsbedarf",
     improvementsSubtitle: "Diese Änderungen verbessern die KI-Lesbarkeit",
     aiPreviewTitle: "KI-Vorschau",
@@ -281,7 +285,7 @@ const de: Dictionary = {
     subtitle: "Schalten Sie die vollständige Plattform mit einem monatlichen Abo frei",
     perMonth: "pro Monat",
     features: [
-      "Unbegrenztes Site-Monitoring",
+      "Monitoring von bis zu 50 Websites",
       "Verfügbarkeits-, Sicherheits- & KI-Zugänglichkeitsprüfungen",
       "Score-Verlauf & Trendanalyse",
       "MCP-API für KI-Agenten-Integration",
