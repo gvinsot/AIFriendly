@@ -257,6 +257,27 @@ const de: Dictionary = {
       catInjection: "Injection / XSS",
     },
   },
+
+  subscribe: {
+    title: "AI Friendly abonnieren",
+    subtitle: "Schalten Sie die vollständige Plattform mit einem monatlichen Abo frei",
+    perMonth: "pro Monat",
+    features: [
+      "Unbegrenztes Site-Monitoring",
+      "Verfügbarkeits-, Sicherheits- & KI-Zugänglichkeitsprüfungen",
+      "Score-Verlauf & Trendanalyse",
+      "MCP-API für KI-Agenten-Integration",
+      "Prioritäts-Support",
+    ],
+    checkoutButton: "Abonnieren — 10 €/Monat",
+    successTitle: "Abo aktiviert!",
+    successMessage: "Ihr Konto ist jetzt aktiv. Sie haben vollen Zugriff auf die Plattform.",
+    goToDashboard: "Zum Dashboard",
+    manageBilling: "Abrechnung verwalten",
+    canceledTitle: "Zahlung abgebrochen",
+    canceledMessage: "Ihr Abo wurde nicht erstellt. Sie können es jederzeit erneut versuchen.",
+    retryCheckout: "Erneut versuchen",
+  },
 };
 
 export default de;

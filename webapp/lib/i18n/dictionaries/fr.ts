@@ -257,6 +257,27 @@ const fr: Dictionary = {
       catInjection: "Injection / XSS",
     },
   },
+
+  subscribe: {
+    title: "S'abonner à AI Friendly",
+    subtitle: "Débloquez la plateforme complète avec un abonnement mensuel",
+    perMonth: "par mois",
+    features: [
+      "Monitoring illimité de sites",
+      "Checks disponibilité, sécurité & accessibilité IA",
+      "Historique des scores & analyse de tendances",
+      "API MCP pour intégration d'agents IA",
+      "Support prioritaire",
+    ],
+    checkoutButton: "S'abonner — 10 €/mois",
+    successTitle: "Abonnement activé !",
+    successMessage: "Votre compte est désormais actif. Vous avez accès à l'ensemble de la plateforme.",
+    goToDashboard: "Aller au tableau de bord",
+    manageBilling: "Gérer la facturation",
+    canceledTitle: "Paiement annulé",
+    canceledMessage: "Votre abonnement n'a pas été créé. Vous pouvez réessayer à tout moment.",
+    retryCheckout: "Réessayer",
+  },
 };
 
 export default fr;

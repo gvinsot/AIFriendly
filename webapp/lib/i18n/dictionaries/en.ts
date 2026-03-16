@@ -257,6 +257,27 @@ const en: Dictionary = {
       catInjection: "Injection / XSS",
     },
   },
+
+  subscribe: {
+    title: "Subscribe to AI Friendly",
+    subtitle: "Unlock the full platform with a monthly subscription",
+    perMonth: "per month",
+    features: [
+      "Unlimited site monitoring",
+      "Availability, security & AI accessibility checks",
+      "Score history & trend analysis",
+      "MCP API for AI agent integration",
+      "Priority support",
+    ],
+    checkoutButton: "Subscribe — 10 €/month",
+    successTitle: "Subscription active!",
+    successMessage: "Your account is now active. You have full access to the platform.",
+    goToDashboard: "Go to dashboard",
+    manageBilling: "Manage billing",
+    canceledTitle: "Checkout canceled",
+    canceledMessage: "Your subscription was not created. You can try again anytime.",
+    retryCheckout: "Try again",
+  },
 };
 
 export default en;

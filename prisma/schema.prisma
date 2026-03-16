@@ -10,17 +10,21 @@ datasource db {
 // ─── NextAuth.js models ──────────────────────────────────────────────────────
 
 model User {
-  id            String    @id @default(cuid())
-  name          String?
-  email         String    @unique
-  emailVerified DateTime?
-  image         String?
-  accounts      Account[]
-  sessions      Session[]
-  sites         Site[]
-  apiKeys       ApiKey[]
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id                    String    @id @default(cuid())
+  name                  String?
+  email                 String    @unique
+  emailVerified         DateTime?
+  image                 String?
+  stripeCustomerId      String?   @unique
+  stripeSubscriptionId  String?
+  stripePriceId         String?
+  stripeCurrentPeriodEnd DateTime?
+  accounts              Account[]
+  sessions              Session[]
+  sites                 Site[]
+  apiKeys               ApiKey[]
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 }
 
 model Account {

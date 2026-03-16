@@ -30,15 +30,26 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     signIn: "/auth/signin",
   },
   callbacks: {
-    jwt({ token, user }) {
+    async jwt({ token, user, trigger }) {
       if (user) {
         token.id = user.id;
+      }
+      // Refresh subscription status on every sign-in or session update
+      if (user || trigger === "update") {
+        const dbUser = await prisma.user.findUnique({
+          where: { id: (token.id as string) },
+          select: { stripeCurrentPeriodEnd: true },
+        });
+        token.isSubscribed =
+          !!dbUser?.stripeCurrentPeriodEnd &&
+          dbUser.stripeCurrentPeriodEnd.getTime() > Date.now();
       }
       return token;
     },
     session({ session, token }) {
       if (session.user && token.id) {
         session.user.id = token.id as string;
+        (session.user as any).isSubscribed = token.isSubscribed as boolean;
       }
       return session;
     },

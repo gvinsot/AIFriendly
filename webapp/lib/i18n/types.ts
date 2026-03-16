@@ -250,4 +250,20 @@ export interface Dictionary {
       catInjection: string;
     };
   };
+
+  // Subscription
+  subscribe: {
+    title: string;
+    subtitle: string;
+    perMonth: string;
+    features: string[];
+    checkoutButton: string;
+    successTitle: string;
+    successMessage: string;
+    goToDashboard: string;
+    manageBilling: string;
+    canceledTitle: string;
+    canceledMessage: string;
+    retryCheckout: string;
+  };
 }
