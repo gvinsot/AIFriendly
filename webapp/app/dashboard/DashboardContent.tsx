@@ -223,7 +223,7 @@ export function DashboardContent({ sites: initialSites, scoreHistory, siteNames 
               disabled={saving}
               className="rounded-lg border border-luxe-gold bg-luxe-gold/10 text-luxe-gold px-6 py-2.5 text-sm font-medium hover:bg-luxe-gold/20 disabled:opacity-50 transition-colors"
             >
-              {saving ? t.sites.savingButton : editingSiteId ? t.common.edit : t.common.add}
+              {saving ? t.sites.savingButton : t.common.save}
             </button>
             <button
               type="button"
