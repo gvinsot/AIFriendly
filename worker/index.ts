@@ -17,7 +17,11 @@ const prisma = new PrismaClient();
 // ═══════════════════════════════════════════════════════════════
 // LLM CONFIGURATION (vLLM / OpenAI-compatible)
 // ═══════════════════════════════════════════════════════════════
-const VLLM_API_URL = process.env.VLLM_API_URL || "";      // e.g. http://vllm:8000/v1
+const RAW_VLLM_API_URL = process.env.VLLM_API_URL || "";   // e.g. http://vllm:8000/v1
+// Normalize: ensure base URL ends with /v1 for OpenAI-compatible API
+const VLLM_API_URL = RAW_VLLM_API_URL
+  ? RAW_VLLM_API_URL.replace(/\/+$/, "").replace(/\/v1$/, "") + "/v1"
+  : "";
 const VLLM_API_KEY = process.env.VLLM_API_KEY || "";       // API key (optional for local vLLM)
 const VLLM_MODEL = process.env.VLLM_MODEL || "default";    // Model name served by vLLM
 const LLM_ENABLED = !!VLLM_API_URL;
@@ -167,7 +171,8 @@ ${truncatedContent}`;
     clearTimeout(timeout);
 
     if (!res.ok) {
-      console.error(`  [LLM] API error: ${res.status} ${res.statusText}`);
+      const body = await res.text().catch(() => "");
+      console.error(`  [LLM] API error: ${res.status} ${res.statusText} — URL: ${VLLM_API_URL}/chat/completions, model: ${VLLM_MODEL}${body ? `, body: ${body.slice(0, 200)}` : ""}`);
       return null;
     }
 
