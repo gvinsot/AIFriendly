@@ -98,13 +98,16 @@ model Site {
 }
 
 model AnalysisResult {
-  id        String   @id @default(cuid())
-  siteId    String
-  score     Float
-  maxScore  Float    @default(10)
-  details   Json
-  site      Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
+  id               String   @id @default(cuid())
+  siteId           String
+  score            Float
+  maxScore         Float    @default(10)
+  ethicsScore      Float?
+  coherenceScore   Float?
+  aiGeneratedScore Float?
+  details          Json
+  site             Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  createdAt        DateTime @default(now())
 
   @@index([siteId, createdAt])
   @@index([createdAt])

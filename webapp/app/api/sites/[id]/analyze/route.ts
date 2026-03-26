@@ -28,6 +28,9 @@ export async function POST(_req: NextRequest, context: RouteContext) {
         siteId: site.id,
         score: result.score,
         maxScore: result.maxScore,
+        ethicsScore: result.ethicsScore,
+        coherenceScore: result.coherenceScore,
+        aiGeneratedScore: result.aiGeneratedScore,
         details: JSON.parse(JSON.stringify({
           improvements: result.improvements,
           aiPreviewYaml: result.aiPreviewYaml,
