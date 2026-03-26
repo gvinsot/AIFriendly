@@ -11,6 +11,7 @@
 
 import { PrismaClient } from "@prisma/client";
 import * as cheerio from "cheerio";
+import { createHash } from "crypto";
 
 const prisma = new PrismaClient();
 
@@ -80,6 +81,43 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutM
 function escapeYaml(s: string): string {
   if (/[\n"\\]/.test(s)) return `"${s.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n")}"`;
   return s;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// LLM CALL OPTIMIZATION
+// ═══════════════════════════════════════════════════════════════
+
+/** Minimum content length (chars) to justify an LLM call */
+const LLM_MIN_CONTENT_LENGTH = 200;
+
+/** Delay between consecutive LLM calls to avoid vLLM overload */
+const LLM_CALL_DELAY_MS = parseInt(process.env.LLM_CALL_DELAY_MS || "5000", 10);
+
+/** Compute a stable hash of the text content sent to the LLM */
+function contentHash(text: string): string {
+  return createHash("sha256").update(text).digest("hex").slice(0, 16);
+}
+
+/** Parse frequency string to milliseconds */
+function frequencyToMs(freq: string): number {
+  switch (freq) {
+    case "6h":      return 6 * 60 * 60 * 1000;
+    case "daily":   return 24 * 60 * 60 * 1000;
+    case "weekly":  return 7 * 24 * 60 * 60 * 1000;
+    case "monthly": return 30 * 24 * 60 * 60 * 1000;
+    default:        return 24 * 60 * 60 * 1000;
+  }
+}
+
+/** Simple sequential queue to limit LLM concurrency to 1 at a time */
+let llmQueuePromise = Promise.resolve();
+function enqueueLLMCall<T>(fn: () => Promise<T>): Promise<T> {
+  const result = llmQueuePromise.then(async () => {
+    await new Promise(r => setTimeout(r, LLM_CALL_DELAY_MS));
+    return fn();
+  });
+  llmQueuePromise = result.then(() => {}, () => {});
+  return result;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -220,7 +258,12 @@ interface Improvement {
   suggestion?: string;
 }
 
-async function analyzeUrl(targetUrl: string) {
+interface PreviousLLMResult {
+  contentHash: string;
+  llmScores: LLMScores | null;
+}
+
+async function analyzeUrl(targetUrl: string, previousResult?: PreviousLLMResult) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   let res: Response;
@@ -384,7 +427,21 @@ async function analyzeUrl(targetUrl: string) {
   else if (wordCount > 200) { aiGeneratedScore -= 0.5; improvements.push({ id: "ai-no-author", title: "Pas d'auteur identifié", description: "Absence de meta author.", severity: "info", category: "Détection IA" }); }
 
   // ── LLM-based analysis (blends with heuristic scores) ──
-  const llmResult = await analyzWithLLM(mainClean, title, lang, targetUrl);
+  // Compute content hash to detect unchanged pages
+  const currentHash = contentHash(mainClean);
+
+  // Skip LLM if content is too short for meaningful analysis
+  // or if content hasn't changed since last analysis (reuse cached scores)
+  let llmResult: LLMScores | null = null;
+  if (mainClean.length < LLM_MIN_CONTENT_LENGTH) {
+    console.log(`    -> LLM skipped: content too short (${mainClean.length} chars)`);
+  } else if (previousResult?.contentHash === currentHash && previousResult?.llmScores) {
+    llmResult = previousResult.llmScores;
+    console.log(`    -> LLM skipped: content unchanged (hash=${currentHash})`);
+  } else {
+    llmResult = await enqueueLLMCall(() => analyzWithLLM(mainClean, title, lang, targetUrl));
+  }
+
   if (llmResult) {
     // Blend: 40% heuristic + 60% LLM for more accurate scoring
     ethicsScore = ethicsScore * 0.4 + llmResult.ethicsScore * 0.6;
@@ -441,6 +498,8 @@ async function analyzeUrl(targetUrl: string) {
         metaRobots: { noindex: metaRobots.includes("noindex"), nofollow: metaRobots.includes("nofollow"), nosnippet: metaRobots.includes("nosnippet"), noai: metaRobots.includes("noai") || metaRobots.includes("noimageai") },
       },
       analyzedAt: new Date().toISOString(),
+      contentHash: currentHash,
+      llmScores: llmResult,
     },
   };
 }
@@ -452,20 +511,38 @@ async function processAIAnalysis() {
   const sites = await prisma.site.findMany({
     where: { isActive: true },
     include: {
-      analyses: { orderBy: { createdAt: "desc" }, take: 1, select: { createdAt: true } },
+      analyses: { orderBy: { createdAt: "desc" }, take: 1, select: { createdAt: true, details: true } },
     },
   });
 
   let analyzed = 0;
+  let skipped = 0;
   for (const site of sites) {
-    const lastAnalysis = site.analyses[0]?.createdAt;
-    const isDue = !lastAnalysis || (now.getTime() - lastAnalysis.getTime() > AI_CHECK_INTERVAL_MS);
+    const lastAnalysis = site.analyses[0];
+    // Respect site.frequency instead of fixed 1h interval
+    const intervalMs = frequencyToMs(site.frequency);
+    const isDue = !lastAnalysis?.createdAt || (now.getTime() - lastAnalysis.createdAt.getTime() > intervalMs);
 
-    if (!isDue) continue;
+    if (!isDue) {
+      skipped++;
+      continue;
+    }
 
-    console.log(`  [AI] Analyzing: ${site.name} (${site.url})`);
+    console.log(`  [AI] Analyzing: ${site.name} (${site.url}) [freq=${site.frequency}]`);
     try {
-      const result = await analyzeUrl(site.url);
+      // Extract previous content hash and LLM scores for deduplication
+      let previousResult: PreviousLLMResult | undefined;
+      if (lastAnalysis?.details && typeof lastAnalysis.details === "object") {
+        const details = lastAnalysis.details as Record<string, unknown>;
+        if (details.contentHash && typeof details.contentHash === "string") {
+          previousResult = {
+            contentHash: details.contentHash,
+            llmScores: (details.llmScores as LLMScores) || null,
+          };
+        }
+      }
+
+      const result = await analyzeUrl(site.url, previousResult);
       await prisma.analysisResult.create({
         data: {
           siteId: site.id,
@@ -485,7 +562,7 @@ async function processAIAnalysis() {
     await new Promise((r) => setTimeout(r, 2000));
   }
 
-  console.log(`  [AI] Done. Analyzed ${analyzed}/${sites.length} sites.`);
+  console.log(`  [AI] Done. Analyzed ${analyzed}/${sites.length} sites (${skipped} skipped, not due).`);
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1190,6 +1267,7 @@ async function main() {
   console.log(`  Security scan interval: ${SECURITY_INTERVAL_MS / 1000}s`);
   console.log(`  Retention: ${RETENTION_DAYS} days`);
   console.log(`  LLM analysis: ${LLM_ENABLED ? `enabled (${VLLM_API_URL}, model: ${VLLM_MODEL})` : "disabled (heuristic only)"}`);
+  console.log(`  LLM call delay: ${LLM_CALL_DELAY_MS}ms, min content: ${LLM_MIN_CONTENT_LENGTH} chars`);
 
   // Each loop waits for the previous run to finish before sleeping then re-running.
   // No overlap possible within a single loop.
