@@ -1,11 +1,11 @@
-"use client";
+use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useI18n } from "@/lib/i18n/context";
 import { ScoreHistoryChart } from "../../ScoreHistoryChart";
-import ShareSection from "@/components/ShareSection";
+import { ShareSection } from "@/components/ShareSection";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
