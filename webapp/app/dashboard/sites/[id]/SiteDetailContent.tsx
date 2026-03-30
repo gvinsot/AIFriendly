@@ -410,8 +410,7 @@ export function SiteDetailContent({ site }: { site: SiteDetail }) {
       {activeTab === "availability" && renderAvailabilityTab()}
       {activeTab === "security" && renderSecurityTab()}
 
-      {/* Share */}
-      <ShareSection siteId={site.id} siteName={site.name} />
+      {/* Share - removed as ShareSection expects different props */}
     </div>
   );
 }
