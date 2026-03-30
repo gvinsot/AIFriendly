@@ -1,13 +1,13 @@
-export type Locale = \"en\" | \"fr\" | \"es\" | \"de\";
+export type Locale = "en" | "fr" | "es" | "de";
 
 export const LOCALES: { code: Locale; label: string; flag: string }[] = [
-  { code: \"en\", label: \"English\", flag: \"🇬🇧\" },
-  { code: \"fr\", label: \"Français\", flag: \"🇫🇷\" },
-  { code: \"es\", label: \"Español\", flag: \"🇪🇸\" },
-  { code: \"de\", label: \"Deutsch\", flag: \"🇩🇪\" },
+  { code: "en", label: "English", flag: "🇬🇧" },
+  { code: "fr", label: "Français", flag: "🇫🇷" },
+  { code: "es", label: "Español", flag: "🇪🇸" },
+  { code: "de", label: "Deutsch", flag: "🇩🇪" },
 ];
 
-export const DEFAULT_LOCALE: Locale = \"fr\";
+export const DEFAULT_LOCALE: Locale = "fr";
 
 export interface Dictionary {
   // Common
@@ -31,7 +31,7 @@ export interface Dictionary {
     analyzing: string;
     severity: { critical: string; warning: string; info: string };
     frequency: {
-      \"6h\": string;
+      "6h": string;
       daily: string;
       weekly: string;
       monthly: string;
@@ -187,7 +187,7 @@ export interface Dictionary {
     urlPlaceholder: string;
     analysisFrequency: string;
     frequencyOptions: {
-      \"6h\": string;
+      "6h": string;
       daily: string;
       weekly: string;
       monthly: string;
