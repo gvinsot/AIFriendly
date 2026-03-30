@@ -1,13 +1,13 @@
-export type Locale = "en" | "fr" | "es" | "de";
+export type Locale = \"en\" | \"fr\" | \"es\" | \"de\";
 
 export const LOCALES: { code: Locale; label: string; flag: string }[] = [
-  { code: "en", label: "English", flag: "🇬🇧" },
-  { code: "fr", label: "Français", flag: "🇫🇷" },
-  { code: "es", label: "Español", flag: "🇪🇸" },
-  { code: "de", label: "Deutsch", flag: "🇩🇪" },
+  { code: \"en\", label: \"English\", flag: \"🇬🇧\" },
+  { code: \"fr\", label: \"Français\", flag: \"🇫🇷\" },
+  { code: \"es\", label: \"Español\", flag: \"🇪🇸\" },
+  { code: \"de\", label: \"Deutsch\", flag: \"🇩🇪\" },
 ];
 
-export const DEFAULT_LOCALE: Locale = "fr";
+export const DEFAULT_LOCALE: Locale = \"fr\";
 
 export interface Dictionary {
   // Common
@@ -31,7 +31,7 @@ export interface Dictionary {
     analyzing: string;
     severity: { critical: string; warning: string; info: string };
     frequency: {
-      "6h": string;
+      \"6h\": string;
       daily: string;
       weekly: string;
       monthly: string;
@@ -187,7 +187,7 @@ export interface Dictionary {
     urlPlaceholder: string;
     analysisFrequency: string;
     frequencyOptions: {
-      "6h": string;
+      \"6h\": string;
       daily: string;
       weekly: string;
       monthly: string;
@@ -271,6 +271,37 @@ export interface Dictionary {
       catInfoLeak: string;
       catInjection: string;
     };
+    // Empty states (flat structure to match actual translations)
+    noAiTitle: string;
+    noAiDescription: string;
+    noAvailTitle: string;
+    noAvailDescription: string;
+    noSecTitle: string;
+    noSecDescription: string;
+    // Charts
+    aiScoreTrend: string;
+    availScoreTrend: string;
+    secScoreTrend: string;
+    // Details
+    analysisDetails: string;
+    availDetails: string;
+    secDetails: string;
+    // Metrics
+    httpStatus: string;
+    pingMs: string;
+    ttfbMs: string;
+    loadTimeMs: string;
+    responseSize: string;
+    sslValid: string;
+    sslExpiry: string;
+    headersScore: string;
+    sslScore: string;
+    cookiesScore: string;
+    infoLeakScore: string;
+    injectionScore: string;
+    ethicsScore: string;
+    coherenceScore: string;
+    aiGeneratedScore: string;
   };
 
   // Subscription
