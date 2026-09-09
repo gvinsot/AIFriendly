@@ -278,6 +278,37 @@ const es: Dictionary = {
       catInfoLeak: "Fugas de información",
       catInjection: "Inyección / XSS",
     },
+    // Empty states
+    noAiTitle: "Sin análisis de IA aún",
+    noAiDescription: "Se realizará un análisis de accesibilidad IA automáticamente según tu programación.",
+    noAvailTitle: "Sin verificación aún",
+    noAvailDescription: "Las verificaciones de disponibilidad se ejecutan automáticamente cada pocos minutos.",
+    noSecTitle: "Sin escaneo de seguridad aún",
+    noSecDescription: "Los escaneos de seguridad se ejecutan automáticamente según tu programación.",
+    // Charts
+    aiScoreTrend: "Tendencia del score IA",
+    availScoreTrend: "Tendencia del score disponibilidad",
+    secScoreTrend: "Tendencia del score seguridad",
+    // Details
+    analysisDetails: "Detalles del análisis",
+    availDetails: "Detalles de disponibilidad",
+    secDetails: "Detalles de seguridad",
+    // Metrics
+    httpStatus: "Estado HTTP",
+    pingMs: "Ping",
+    ttfbMs: "TTFB",
+    loadTimeMs: "Tiempo de carga",
+    responseSize: "Tamaño de respuesta",
+    sslValid: "SSL válido",
+    sslExpiry: "Expiración SSL",
+    headersScore: "Cabeceras",
+    sslScore: "SSL/TLS",
+    cookiesScore: "Cookies",
+    infoLeakScore: "Fuga de info",
+    injectionScore: "Inyección",
+    ethicsScore: "Ética",
+    coherenceScore: "Coherencia",
+    aiGeneratedScore: "Contenido IA",
   },
 
   subscribe: {

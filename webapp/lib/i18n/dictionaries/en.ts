@@ -278,6 +278,37 @@ const en: Dictionary = {
       catInfoLeak: "Information leakage",
       catInjection: "Injection / XSS",
     },
+    // Empty states
+    noAiTitle: "No AI analysis yet",
+    noAiDescription: "An AI accessibility analysis will be performed automatically based on your schedule.",
+    noAvailTitle: "No availability check yet",
+    noAvailDescription: "Availability checks run automatically every few minutes.",
+    noSecTitle: "No security scan yet",
+    noSecDescription: "Security scans run automatically based on your schedule.",
+    // Charts
+    aiScoreTrend: "AI Score Trend",
+    availScoreTrend: "Availability Score Trend",
+    secScoreTrend: "Security Score Trend",
+    // Details
+    analysisDetails: "Analysis Details",
+    availDetails: "Availability Details",
+    secDetails: "Security Details",
+    // Metrics
+    httpStatus: "HTTP Status",
+    pingMs: "Ping",
+    ttfbMs: "TTFB",
+    loadTimeMs: "Load Time",
+    responseSize: "Response Size",
+    sslValid: "SSL Valid",
+    sslExpiry: "SSL Expiry",
+    headersScore: "Headers",
+    sslScore: "SSL/TLS",
+    cookiesScore: "Cookies",
+    infoLeakScore: "Info Leak",
+    injectionScore: "Injection",
+    ethicsScore: "Ethics",
+    coherenceScore: "Coherence",
+    aiGeneratedScore: "AI Generated",
   },
 
   subscribe: {

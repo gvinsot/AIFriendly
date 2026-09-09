@@ -3,6 +3,9 @@ const nextConfig = {
   reactStrictMode: true,
   output: "standalone",
   serverExternalPackages: ["@prisma/client"],
+  env: {
+    APP_VERSION: process.env.VERSION || "dev",
+  },
   async headers() {
     return [
       {

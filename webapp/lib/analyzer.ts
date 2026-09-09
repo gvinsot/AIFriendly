@@ -1,4 +1,5 @@
 import * as cheerio from "cheerio";
+import { createHash } from "crypto";
 
 const MAX_HTML_BYTES = 5 * 1024 * 1024;
 const FETCH_TIMEOUT_MS = 15000;
@@ -9,6 +10,41 @@ const VLLM_API_KEY = process.env.VLLM_API_KEY || "";
 const VLLM_MODEL = process.env.VLLM_MODEL || "default";
 const LLM_ENABLED = !!VLLM_API_URL;
 const LLM_TIMEOUT_MS = 30000;
+
+// LLM call optimization
+const LLM_MIN_CONTENT_LENGTH = 200;
+const LLM_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+const LLM_CACHE_MAX_SIZE = 200;
+
+interface LLMCacheEntry {
+  result: LLMScores;
+  expiresAt: number;
+}
+
+const llmCache = new Map<string, LLMCacheEntry>();
+
+function computeContentHash(text: string): string {
+  return createHash("sha256").update(text).digest("hex").slice(0, 16);
+}
+
+function getCachedLLMResult(hash: string): LLMScores | null {
+  const entry = llmCache.get(hash);
+  if (!entry) return null;
+  if (Date.now() > entry.expiresAt) {
+    llmCache.delete(hash);
+    return null;
+  }
+  return entry.result;
+}
+
+function setCachedLLMResult(hash: string, result: LLMScores): void {
+  // Evict oldest entries if cache is full
+  if (llmCache.size >= LLM_CACHE_MAX_SIZE) {
+    const firstKey = llmCache.keys().next().value;
+    if (firstKey) llmCache.delete(firstKey);
+  }
+  llmCache.set(hash, { result, expiresAt: Date.now() + LLM_CACHE_TTL_MS });
+}
 
 const AI_BOT_AGENTS = [
   "GPTBot", "ChatGPT-User", "Google-Extended", "CCBot",
@@ -503,7 +539,24 @@ export async function analyzeUrl(targetUrl: string): Promise<AnalysisOutput> {
   }
 
   // ── LLM-based analysis (blends with heuristic scores) ──
-  const llmResult = await analyzeWithLLM(mainClean, title, lang, targetUrl);
+  // Use content hash to cache LLM results and avoid duplicate calls
+  const cHash = computeContentHash(mainClean);
+  let llmResult: LLMScores | null = null;
+
+  if (mainClean.length < LLM_MIN_CONTENT_LENGTH) {
+    // Content too short for meaningful LLM analysis
+  } else {
+    llmResult = getCachedLLMResult(cHash);
+    if (llmResult) {
+      console.log(`[LLM] Cache hit for hash=${cHash}`);
+    } else {
+      llmResult = await analyzeWithLLM(mainClean, title, lang, targetUrl);
+      if (llmResult) {
+        setCachedLLMResult(cHash, llmResult);
+      }
+    }
+  }
+
   if (llmResult) {
     // Blend: 40% heuristic + 60% LLM
     ethicsScore = ethicsScore * 0.4 + llmResult.ethicsScore * 0.6;

@@ -271,6 +271,37 @@ export interface Dictionary {
       catInfoLeak: string;
       catInjection: string;
     };
+    // Empty states (flat structure to match actual translations)
+    noAiTitle: string;
+    noAiDescription: string;
+    noAvailTitle: string;
+    noAvailDescription: string;
+    noSecTitle: string;
+    noSecDescription: string;
+    // Charts
+    aiScoreTrend: string;
+    availScoreTrend: string;
+    secScoreTrend: string;
+    // Details
+    analysisDetails: string;
+    availDetails: string;
+    secDetails: string;
+    // Metrics
+    httpStatus: string;
+    pingMs: string;
+    ttfbMs: string;
+    loadTimeMs: string;
+    responseSize: string;
+    sslValid: string;
+    sslExpiry: string;
+    headersScore: string;
+    sslScore: string;
+    cookiesScore: string;
+    infoLeakScore: string;
+    injectionScore: string;
+    ethicsScore: string;
+    coherenceScore: string;
+    aiGeneratedScore: string;
   };
 
   // Subscription

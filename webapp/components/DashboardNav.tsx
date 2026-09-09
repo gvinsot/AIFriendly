@@ -22,7 +22,7 @@ export function DashboardNav({ user }: DashboardNavProps) {
     <header className="border-b border-luxe-border bg-luxe-bg-elevated/80 backdrop-blur-sm sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-6 flex items-center justify-between h-16">
         <div className="flex items-center gap-8">
-          <Link href="/" className="font-display text-xl font-bold tracking-tight">
+          <Link href="/" className="font-display text-xl font-bold tracking-tight" title={`v${process.env.APP_VERSION}`}>
             <span className="title-gradient title-glow">AI</span>
             <span className="text-luxe-fg"> Friendly</span>
           </Link>
