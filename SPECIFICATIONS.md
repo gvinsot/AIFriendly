@@ -474,8 +474,8 @@ Représentation structurée comprenant :
 | Variable | Description |
 |----------|-------------|
 | `DB_CONNECTION_STRING` | URL PostgreSQL |
-| `NEXTAUTH_SECRET` | Secret NextAuth |
-| `NEXTAUTH_URL` | URL publique (https://aifriendly.eu) |
+| `AUTH_SECRET` | Secret Auth.js v5 |
+| `AUTH_URL` | URL publique (https://aifriendly.eu) — sert aussi de base aux URLs de retour Stripe |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | OAuth Google |
 | `MICROSOFT_CLIENT_ID` / `MICROSOFT_CLIENT_SECRET` | OAuth Microsoft |
 | `TRAEFIK_HOST` | Hostname Traefik (aifriendly.eu) |
