@@ -25,6 +25,9 @@ COPY mcp-server/tsconfig.json ./tsconfig.json
 # Non-root user
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 mcpserver
+# Charge les secrets Docker (/run/secrets) dans l'environnement au démarrage
+COPY scripts/load-secrets.sh /usr/local/bin/load-secrets.sh
+RUN chmod +x /usr/local/bin/load-secrets.sh
 USER mcpserver
 
 ENV NODE_ENV=production
@@ -32,4 +35,5 @@ ENV MCP_PORT=3001
 
 EXPOSE 3001
 
+ENTRYPOINT ["/usr/local/bin/load-secrets.sh"]
 CMD ["node", "--import", "tsx", "index.ts"]

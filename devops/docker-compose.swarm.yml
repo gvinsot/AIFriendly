@@ -139,8 +139,8 @@ services:
   ai-friendly-migrate:
     image: registry.methodinfo.fr/ai-friendly-migrate:latest
     build:
-      context: ../prisma
-      dockerfile: Dockerfile.migrate
+      context: ..
+      dockerfile: prisma/Dockerfile.migrate
     environment:
       - DB_CONNECTION_STRING=${DB_CONNECTION_STRING}
     networks:

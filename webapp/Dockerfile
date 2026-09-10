@@ -37,8 +37,12 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=deps /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=deps /app/node_modules/@prisma ./node_modules/@prisma
 COPY --from=deps /app/prisma ./prisma
+# Charge les secrets Docker (/run/secrets) dans l'environnement au démarrage
+COPY scripts/load-secrets.sh /usr/local/bin/load-secrets.sh
+RUN chmod +x /usr/local/bin/load-secrets.sh
 USER nextjs
 EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
+ENTRYPOINT ["/usr/local/bin/load-secrets.sh"]
 CMD ["node", "server.js"]

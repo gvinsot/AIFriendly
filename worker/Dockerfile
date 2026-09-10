@@ -20,8 +20,12 @@ COPY worker/tsconfig.json ./tsconfig.json
 # Non-root user
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 worker
+# Charge les secrets Docker (/run/secrets) dans l'environnement au démarrage
+COPY scripts/load-secrets.sh /usr/local/bin/load-secrets.sh
+RUN chmod +x /usr/local/bin/load-secrets.sh
 USER worker
 
 ENV NODE_ENV=production
 
+ENTRYPOINT ["/usr/local/bin/load-secrets.sh"]
 CMD ["node", "--import", "tsx", "index.ts"]
