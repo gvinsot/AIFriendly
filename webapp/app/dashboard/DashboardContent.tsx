@@ -36,11 +36,10 @@ interface SiteSummary {
 
 interface DashboardContentProps {
   sites: SiteSummary[];
-  scoreHistory: Record<string, string | number>[];
-  siteNames: string[];
+  scoreHistory: React.ReactNode;
 }
 
-export function DashboardContent({ sites: initialSites, scoreHistory, siteNames }: DashboardContentProps) {
+export function DashboardContent({ sites: initialSites, scoreHistory }: DashboardContentProps) {
   const { t, locale } = useI18n();
   const router = useRouter();
   const dateLocale = locale === "fr" ? "fr-FR" : locale === "es" ? "es-ES" : locale === "de" ? "de-DE" : "en-US";
@@ -295,19 +294,27 @@ export function DashboardContent({ sites: initialSites, scoreHistory, siteNames 
       )}
 
       {/* Score history chart */}
-      {scoreHistory.length > 0 && siteNames.length > 0 && (
-        <section className="rounded-2xl bg-luxe-bg-elevated border border-luxe-border shadow-luxe overflow-hidden">
-          <div className="px-6 py-4 border-b border-luxe-border bg-luxe-bg-muted/50">
-            <h2 className="font-display text-lg font-semibold text-luxe-fg">
-              {t.dashboard.scoreHistory}
-            </h2>
-          </div>
-          <div className="p-6">
-            <ScoreHistoryChart data={scoreHistory} siteNames={siteNames} />
-          </div>
-        </section>
-      )}
+      {scoreHistory}
     </div>
+  );
+}
+
+// ─── Score History Panel ─────────────────────────────────────────────────────
+
+export function ScoreHistoryPanel({ data, siteNames }: { data: Record<string, string | number>[]; siteNames: string[] }) {
+  const { t } = useI18n();
+
+  return (
+    <section className="rounded-2xl bg-luxe-bg-elevated border border-luxe-border shadow-luxe overflow-hidden">
+      <div className="px-6 py-4 border-b border-luxe-border bg-luxe-bg-muted/50">
+        <h2 className="font-display text-lg font-semibold text-luxe-fg">
+          {t.dashboard.scoreHistory}
+        </h2>
+      </div>
+      <div className="p-6">
+        <ScoreHistoryChart data={data} siteNames={siteNames} />
+      </div>
+    </section>
   );
 }
 
