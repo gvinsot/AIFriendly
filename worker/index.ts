@@ -12,6 +12,11 @@
 import { PrismaClient } from "@prisma/client";
 import * as cheerio from "cheerio";
 import { createHash } from "crypto";
+import { assertPatchedNodeRuntime, installBrotliSafeFetch } from "./lib/node-security.js";
+
+// Mitigation CVE-2026-111497 (Node2Shell) — voir webapp/lib/node-security.ts
+assertPatchedNodeRuntime("aifriendly-worker");
+installBrotliSafeFetch();
 
 const prisma = new PrismaClient();
 

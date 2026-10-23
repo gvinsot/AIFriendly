@@ -20,6 +20,15 @@ import { z } from "zod";
 import { analyzeUrl } from "./lib/analyzer.js";
 import { checkAvailability } from "./lib/availability-checker.js";
 import { scanSecurity } from "./lib/security-scanner.js";
+import {
+  assertPatchedNodeRuntime,
+  installBrotliSafeFetch,
+  rejectBrotliRequestBody,
+} from "./lib/node-security.js";
+
+// Mitigation CVE-2026-111497 (Node2Shell) — voir lib/node-security.ts
+assertPatchedNodeRuntime("aifriendly-mcp");
+installBrotliSafeFetch();
 
 const prisma = new PrismaClient();
 const PORT = parseInt(process.env.MCP_PORT || "3001", 10);
@@ -482,6 +491,8 @@ function createMcpServerForUser(userId: string): McpServer {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const app = express();
+// Refuse les corps Brotli avant que express.json() ne les décompresse
+app.use(rejectBrotliRequestBody);
 app.use(express.json());
 
 // Health check

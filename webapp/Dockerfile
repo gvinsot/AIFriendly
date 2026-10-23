@@ -2,7 +2,7 @@
 # Build: from repo root with docker build -f webapp/Dockerfile .
 # Run:   docker run -p 3000:3000 ia-friendly:latest
 
-FROM node:20-alpine AS base
+FROM node:24.22.1-alpine AS base
 
 # Étape 1: installer les dépendances (cache séparé)
 FROM base AS deps

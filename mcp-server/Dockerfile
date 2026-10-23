@@ -1,7 +1,7 @@
 # AI Friendly — MCP Server Container
 # Streamable HTTP MCP server with API key authentication
 
-FROM node:20-alpine AS base
+FROM node:24.22.1-alpine AS base
 
 WORKDIR /app
 
@@ -17,6 +17,7 @@ RUN npx prisma generate --schema=./prisma/schema.prisma
 COPY webapp/lib/analyzer.ts ./lib/analyzer.ts
 COPY webapp/lib/availability-checker.ts ./lib/availability-checker.ts
 COPY webapp/lib/security-scanner.ts ./lib/security-scanner.ts
+COPY webapp/lib/node-security.ts ./lib/node-security.ts
 
 # Copy MCP server source
 COPY mcp-server/index.ts ./index.ts

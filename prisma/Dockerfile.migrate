@@ -3,7 +3,7 @@
 # Used for Docker Swarm deployments
 # Build context: racine du repo (nécessaire pour scripts/load-secrets.sh)
 
-FROM node:20-alpine
+FROM node:24.22.1-alpine
 
 WORKDIR /app
 

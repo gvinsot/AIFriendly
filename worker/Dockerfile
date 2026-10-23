@@ -1,7 +1,7 @@
 # AI Friendly — Worker Container
 # Runs scheduled site analyses and 60-day cleanup
 
-FROM node:20-alpine AS base
+FROM node:24.22.1-alpine AS base
 
 WORKDIR /app
 
@@ -14,6 +14,7 @@ COPY prisma/schema.prisma ./prisma/schema.prisma
 RUN npx prisma generate --schema=./prisma/schema.prisma
 
 # Copy worker source
+COPY webapp/lib/node-security.ts ./lib/node-security.ts
 COPY worker/index.ts ./index.ts
 COPY worker/tsconfig.json ./tsconfig.json
 
