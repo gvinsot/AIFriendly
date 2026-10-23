@@ -136,6 +136,11 @@ services:
           - node.labels.gpu == none
 
   # Migration — applique les migrations Prisma au déploiement (one-shot)
+  # Mode "replicated-job" : la tâche s'exécute jusqu'à sa fin puis s'arrête,
+  # sans être vue comme un échec de rolling update (en mode "replicated", la
+  # sortie du conteneur déclenchait update_config.failure_action=pause et
+  # bloquait la vérification de convergence du déploiement). Le job est relancé
+  # à chaque déploiement puisque le tag de l'image change.
   ai-friendly-migrate:
     image: registry.methodinfo.fr/ai-friendly-migrate:latest
     build:
@@ -146,13 +151,12 @@ services:
     networks:
       - postgresqlcluster_internal
     deploy:
-      mode: replicated
+      mode: replicated-job
       replicas: 1
-      update_config:
-        parallelism: 1
-        order: stop-first
       restart_policy:
-        condition: none
+        condition: on-failure
+        max_attempts: 3
+        delay: 10s
       placement:
         constraints:
           - node.labels.gpu == none
