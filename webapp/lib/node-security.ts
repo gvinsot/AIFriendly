@@ -13,6 +13,12 @@
  *    des sites tiers non fiables, et rejeter les réponses encodées en `br` ;
  *  - middleware HTTP rejetant les corps de requête `Content-Encoding: br`.
  *
+ * Les mêmes versions (release sécurité Node.js du 21/10/2026) corrigent aussi
+ * CVE-2026-105483, CVE-2026-106069, CVE-2026-106072 (validation du hostname
+ * TLS), CVE-2026-105481 (keep-alive), CVE-2026-106074 (UUID prédictibles via
+ * startup snapshot), CVE-2026-106071 et CVE-2026-106070 : la vérification de
+ * version ci-dessous couvre donc l'ensemble du lot.
+ *
  * Fichier partagé : utilisé par la webapp, le serveur MCP et le worker.
  */
 
@@ -24,8 +30,8 @@ const PATCHED_VERSIONS: Record<number, [number, number]> = {
 };
 
 /**
- * Indique si une version de Node.js (ex. "v24.22.1") contient le correctif
- * de CVE-2026-111497. Les branches EOL (≤ 21, 23, 25) sont considérées vulnérables.
+ * Indique si une version de Node.js (ex. "v24.22.1") contient les correctifs
+ * de la release sécurité du 21/10/2026 (CVE-2026-111497 et suivantes). Les branches EOL (≤ 21, 23, 25) sont considérées vulnérables.
  */
 export function isNodeVersionPatched(version: string): boolean {
   const match = /^v?(\d+)\.(\d+)\.(\d+)/.exec(version);
@@ -49,7 +55,8 @@ export function assertPatchedNodeRuntime(service: string): void {
   if (isNodeVersionPatched(process.version)) return;
 
   const message =
-    `[${service}] Node.js ${process.version} est vulnérable à CVE-2026-111497 (Node2Shell, RCE via Brotli). ` +
+    `[${service}] Node.js ${process.version} est vulnérable à CVE-2026-111497 (Node2Shell, RCE via Brotli) ` +
+    "et aux autres CVE de la release sécurité Node.js du 21/10/2026. " +
     "Mettez à jour vers Node.js >= 22.23.4, 24.22.1 ou 26.12.1.";
 
   if (process.env.NODE_ENV === "production" && process.env.ALLOW_VULNERABLE_NODE !== "1") {
