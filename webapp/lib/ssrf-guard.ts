@@ -15,12 +15,24 @@
  * `safeFetch` résout le hostname, refuse toute adresse non publique, puis
  * suit les redirections manuellement en revalidant chaque saut.
  *
+ * La connexion elle-même est ouverte via `node:http`/`node:https` avec une
+ * fonction `lookup` personnalisée qui revalide CHAQUE adresse résolue au
+ * moment précis où le socket est créé : `fetch()` résolvait le nom une
+ * seconde fois, indépendamment de la validation (TOCTOU / DNS rebinding —
+ * un domaine à TTL 0 pouvait répondre une IP publique à la vérification puis
+ * 127.0.0.1 à la connexion).
+ *
  * Fichier partagé : utilisé par la webapp, le serveur MCP et le worker
  * (copié dans `lib/` par leurs Dockerfiles). Aucune dépendance externe.
  */
 
+import dns from "node:dns";
 import { lookup } from "node:dns/promises";
+import http from "node:http";
+import https from "node:https";
 import { isIP } from "node:net";
+import { Readable } from "node:stream";
+import zlib from "node:zlib";
 
 const ALLOWED_PROTOCOLS = new Set(["http:", "https:"]);
 const MAX_REDIRECTS = 5;
@@ -233,6 +245,157 @@ export async function assertPublicUrl(input: string | URL): Promise<URL> {
   return url;
 }
 
+// ─── Connexion avec validation DNS au moment du connect ────────────────────
+//
+// C'est le point de contrôle réel contre le DNS rebinding : la fonction
+// `lookup` ci-dessous est celle que le socket appelle pour ouvrir la
+// connexion, et elle ne retourne que des adresses publiques validées.
+
+function ssrfLookupError(hostname: string): Error {
+  const err = new Error(
+    `SSRF : la résolution de "${hostname}" vers une adresse non publique est refusée.`
+  ) as Error & { code: string };
+  err.code = "ESSRFBLOCKED";
+  return err;
+}
+
+/**
+ * `lookup` de connexion : résout le hostname et refuse la connexion si une
+ * des adresses retournées n'est pas publique. Appelée par le socket au moment
+ * de l'ouverture de la connexion, donc aucune résolution non validée n'est
+ * jamais utilisée pour se connecter.
+ */
+const validatingLookup = ((
+  hostname: string,
+  options: { all?: boolean },
+  callback: (err: NodeJS.ErrnoException | null, addresses?: unknown, family?: number) => void
+) => {
+  const finish = (addresses: { address: string; family: number }[]) => {
+    for (const a of addresses) {
+      if (isBlockedIp(a.address)) return callback(ssrfLookupError(hostname));
+    }
+    if (options?.all) return callback(null, addresses);
+    callback(null, addresses[0].address, addresses[0].family);
+  };
+
+  const version = isIP(hostname);
+  if (version !== 0) {
+    if (isBlockedIp(hostname)) return callback(ssrfLookupError(hostname));
+    return finish([{ address: hostname, family: version }]);
+  }
+
+  dns.lookup(hostname, { all: true, verbatim: true }, (err, addresses) => {
+    if (err || !Array.isArray(addresses) || addresses.length === 0) {
+      return callback(err ?? new Error(`Échec de la résolution DNS de "${hostname}".`));
+    }
+    finish(addresses as { address: string; family: number }[]);
+  });
+}) as NonNullable<http.RequestOptions["lookup"]>;
+
+/** En-têtes à ne jamais propager vers une autre origine (redirect cross-origin). */
+const CROSS_ORIGIN_STRIPPED_HEADERS = ["authorization", "cookie", "proxy-authorization"];
+
+function headersToRecord(headers: Headers): Record<string, string> {
+  const record: Record<string, string> = {};
+  for (const [key, value] of headers.entries()) record[key] = value;
+  return record;
+}
+
+/**
+ * Requête HTTP(S) de bas niveau dont la résolution DNS est validée au moment
+ * de la connexion (voir `validatingLookup`). Remplace `fetch()` ici car fetch
+ * re-résout le hostname indépendamment de toute validation préalable.
+ *
+ * Compatibilité avec le fetch d'avant : `Accept-Encoding` sans Brotli
+ * (mitigation CVE-2026-111497), décompression gzip/deflate, rejet des autres
+ * encodages (dont `br`), `Response.url` renseignée.
+ */
+function rawRequest(
+  target: URL,
+  init: { method: string; headers: Headers; body?: unknown; signal?: AbortSignal | null }
+): Promise<Response> {
+  const lib = target.protocol === "https:" ? https : http;
+  const headers = new Headers(init.headers);
+  if (!headers.has("accept-encoding")) headers.set("accept-encoding", "gzip, deflate");
+  if (!headers.has("user-agent")) headers.set("user-agent", "AIFriendly/1.0 (ssrf-guard)");
+
+  const body = init.body;
+  if (body != null && !headers.has("content-length") && !headers.has("transfer-encoding")) {
+    const len =
+      typeof body === "string"
+        ? Buffer.byteLength(body)
+        : (body as Uint8Array).byteLength;
+    if (Number.isFinite(len)) headers.set("content-length", String(len));
+  }
+
+  return new Promise<Response>((resolve, reject) => {
+    const req = lib.request(
+      target,
+      {
+        method: init.method,
+        headers: headersToRecord(headers),
+        agent: false, // connexion dédiée : le lookup est revalidé à chaque requête
+        lookup: validatingLookup,
+        signal: init.signal ?? undefined,
+      },
+      (res) => {
+        const encoding = String(res.headers["content-encoding"] ?? "").toLowerCase().trim();
+        // Mitigation CVE-2026-111497 (Node2Shell) : jamais de Brotli en réponse
+        if (/(^|,)\s*br\s*(,|$)/.test(encoding)) {
+          res.resume();
+          reject(
+            new TypeError(
+              "Réponse refusée : Content-Encoding Brotli non autorisé (mitigation CVE-2026-111497)."
+            )
+          );
+          return;
+        }
+
+        // HEAD / 204 / 304 : pas de corps, ne jamais décompresser
+        const noBody =
+          init.method === "HEAD" || res.statusCode === 204 || res.statusCode === 304;
+        let stream: Readable = res;
+        let decompressed = false;
+        if (!noBody && (encoding === "gzip" || encoding === "x-gzip")) {
+          stream = res.pipe(zlib.createGunzip());
+          decompressed = true;
+        } else if (!noBody && encoding === "deflate") {
+          stream = res.pipe(zlib.createInflate());
+          decompressed = true;
+        } else if (!noBody && encoding && encoding !== "identity") {
+          res.resume();
+          reject(new TypeError(`Content-Encoding non supporté : ${encoding}.`));
+          return;
+        }
+
+        const outHeaders = new Headers();
+        for (const [key, value] of Object.entries(res.headers)) {
+          if (value === undefined) continue;
+          if (decompressed && (key === "content-encoding" || key === "content-length")) continue;
+          if (Array.isArray(value)) {
+            for (const v of value) outHeaders.append(key, v);
+          } else {
+            outHeaders.set(key, value);
+          }
+        }
+
+        const status = res.statusCode ?? 502;
+        const response = new Response(Readable.toWeb(stream) as unknown as ReadableStream<Uint8Array>, {
+          status: status >= 200 && status <= 599 ? status : 502,
+          statusText: res.statusMessage ?? "",
+          headers: outHeaders,
+        });
+        Object.defineProperty(response, "url", { value: target.href });
+        Object.defineProperty(response, "redirected", { value: false });
+        resolve(response);
+      }
+    );
+    req.on("error", reject);
+    if (body != null) req.write(body as string | Uint8Array);
+    req.end();
+  });
+}
+
 // ─── fetch protégé ─────────────────────────────────────────────────────────
 
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
@@ -240,8 +403,11 @@ const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 /**
  * `fetch` sécurisé pour les URL non fiables :
  *  - valide l'URL et la résolution DNS avant chaque requête ;
+ *  - ouvre la connexion via `rawRequest`, qui revalide la résolution DNS au
+ *    moment du connect (anti DNS rebinding) ;
  *  - suit les redirections manuellement (max 5) en revalidant chaque saut,
- *    sans jamais contacter une cible interne ;
+ *    sans jamais contacter une cible interne, et sans propager les
+ *    identifiants vers une autre origine ;
  *  - `redirect: "manual"` et `"error"` restent respectés ;
  *  - le corps de la réponse est tronqué à `maxBodyBytes` (10 Mo par défaut).
  *
@@ -256,9 +422,18 @@ export async function safeFetch(
   let current = await assertPublicUrl(input);
   let method = (init.method ?? "GET").toUpperCase();
   let body = init.body;
+  let headers = new Headers(init.headers);
 
   for (let hop = 0; ; hop++) {
-    const res = await fetch(current.href, { ...init, method, body, redirect: "manual" });
+    let res: Response;
+    try {
+      res = await rawRequest(current, { method, headers, body, signal: init.signal });
+    } catch (err) {
+      // Refus par le lookup de connexion (DNS rebinding, IP privée...) :
+      // même erreur publique que la validation préalable.
+      if ((err as { code?: string }).code === "ESSRFBLOCKED") throw new SsrfBlockedError();
+      throw err;
+    }
 
     if (!REDIRECT_STATUSES.has(res.status) || mode === "manual") {
       return limitResponseBody(res, maxBodyBytes);
@@ -273,7 +448,13 @@ export async function safeFetch(
     await res.body?.cancel().catch(() => {});
     if (hop >= MAX_REDIRECTS) throw new TypeError("Trop de redirections.");
 
-    current = await assertPublicUrl(new URL(location, current));
+    const next = await assertPublicUrl(new URL(location, current));
+    // Ne pas propager d'identifiants vers une autre origine
+    if (next.origin !== current.origin) {
+      headers = new Headers(headers);
+      for (const h of CROSS_ORIGIN_STRIPPED_HEADERS) headers.delete(h);
+    }
+    current = next;
     // Sémantique fetch : 303 (ou 301/302 sur POST) → GET sans corps
     if (res.status === 303 || ((res.status === 301 || res.status === 302) && method === "POST")) {
       if (method !== "HEAD") method = "GET";
