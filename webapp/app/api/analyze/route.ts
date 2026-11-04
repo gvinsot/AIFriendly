@@ -3,6 +3,7 @@ import * as cheerio from "cheerio";
 import type { AnalysisResult, Improvement, AIPreviewContent, BotAccessInfo } from "@/lib/types";
 import { validateAndNormalizeUrl, isUrlSafeForFetch } from "@/lib/urlSecurity";
 import { checkRateLimit } from "@/lib/rateLimit";
+import { safeFetch, readBodyLimited, SsrfBlockedError } from "@/lib/ssrf-guard";
 import { checkAvailability } from "@/lib/availability-checker";
 import { scanSecurity } from "@/lib/security-scanner";
 
@@ -46,9 +47,10 @@ async function fetchTextFile(baseUrl: string, path: string, timeoutMs = 5000): P
     const fileUrl = new URL(path, baseUrl).href;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
-    const res = await fetch(fileUrl, {
+    const res = await safeFetch(fileUrl, {
       signal: controller.signal,
       headers: { "User-Agent": "IAFriendly/1.0 (Analysis)" },
+      maxBodyBytes: 50000,
     });
     clearTimeout(timeout);
     if (!res.ok) return null;
@@ -245,7 +247,7 @@ export async function POST(request: NextRequest) {
     const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
     let res: Response;
     try {
-      res = await fetch(url, {
+      res = await safeFetch(url, {
         signal: controller.signal,
         headers: {
           "User-Agent": "IAFriendly/1.0 (Analysis; +https://ia-friendly.vercel.app)",
@@ -278,8 +280,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const rawHtml = await res.text();
-    if (rawHtml.length > MAX_HTML_BYTES) {
+    const { text: rawHtml, truncated } = await readBodyLimited(res, MAX_HTML_BYTES);
+    if (truncated) {
       return NextResponse.json(
         { error: "La page est trop volumineuse pour être analysée." },
         { status: 422 }
@@ -692,6 +694,9 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(result);
   } catch (err) {
+    if (err instanceof SsrfBlockedError) {
+      return NextResponse.json({ error: "Cette URL n'est pas autorisée." }, { status: 400 });
+    }
     const isAbort =
       (err as { name?: string }).name === "AbortError" ||
       (err instanceof Error && err.message.includes("abort"));

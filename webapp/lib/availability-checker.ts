@@ -3,6 +3,8 @@
  * Returns a score out of 10 based on availability metrics.
  */
 
+import { safeFetch } from "./ssrf-guard";
+
 const AVAILABILITY_TIMEOUT_MS = 30000;
 
 interface AvailabilityResult {
@@ -47,7 +49,7 @@ export async function checkAvailability(targetUrl: string): Promise<Availability
     const pingStart = performance.now();
     let pingRes: Response;
     try {
-      pingRes = await fetch(targetUrl, {
+      pingRes = await safeFetch(targetUrl, {
         method: "HEAD",
         signal: controller.signal,
         redirect: "follow",
@@ -83,7 +85,7 @@ export async function checkAvailability(targetUrl: string): Promise<Availability
     const loadStart = performance.now();
     let fullRes: Response;
     try {
-      fullRes = await fetch(targetUrl, {
+      fullRes = await safeFetch(targetUrl, {
         method: "GET",
         signal: controller.signal,
         redirect: "follow",

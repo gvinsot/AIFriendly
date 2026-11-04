@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { randomBytes, createHash } from "crypto";
+import { requireSubscribedUser, readJsonObject } from "@/lib/api-auth";
 
 function hashKey(key: string): string {
   return createHash("sha256").update(key).digest("hex");
@@ -31,13 +32,13 @@ export async function GET() {
 
 // POST /api/keys — create a new API key
 export async function POST(request: Request) {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  // Les clés API donnent accès au serveur MCP : réservé aux abonnés
+  const guard = await requireSubscribedUser();
+  if (guard.response) return guard.response;
+  const userId = guard.userId;
 
-  const body = await request.json();
-  const name = (body.name || "").trim();
+  const body = await readJsonObject(request);
+  const name = typeof body?.name === "string" ? body.name.trim() : "";
 
   if (!name || name.length > 100) {
     return NextResponse.json(
@@ -48,7 +49,7 @@ export async function POST(request: Request) {
 
   // Limit to 10 API keys per user
   const count = await prisma.apiKey.count({
-    where: { userId: session.user.id },
+    where: { userId },
   });
   if (count >= 10) {
     return NextResponse.json(
@@ -64,7 +65,7 @@ export async function POST(request: Request) {
 
   const apiKey = await prisma.apiKey.create({
     data: {
-      userId: session.user.id,
+      userId,
       name,
       keyHash,
       keyPrefix,

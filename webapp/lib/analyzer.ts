@@ -1,5 +1,6 @@
 import * as cheerio from "cheerio";
 import { createHash } from "crypto";
+import { safeFetch, readBodyLimited } from "./ssrf-guard";
 
 const MAX_HTML_BYTES = 5 * 1024 * 1024;
 const FETCH_TIMEOUT_MS = 15000;
@@ -86,9 +87,10 @@ async function fetchTextFile(baseUrl: string, path: string, timeoutMs = 5000): P
     const fileUrl = new URL(path, baseUrl).href;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
-    const res = await fetch(fileUrl, {
+    const res = await safeFetch(fileUrl, {
       signal: controller.signal,
       headers: { "User-Agent": "IAFriendly/1.0 (Analysis)" },
+      maxBodyBytes: 50000,
     });
     clearTimeout(timeout);
     if (!res.ok) return null;
@@ -266,7 +268,7 @@ export async function analyzeUrl(targetUrl: string): Promise<AnalysisOutput> {
   const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   let res: Response;
   try {
-    res = await fetch(targetUrl, {
+    res = await safeFetch(targetUrl, {
       signal: controller.signal,
       headers: { "User-Agent": "IAFriendly/1.0 (Analysis; +https://aifriendly.eu)" },
       redirect: "follow",
@@ -282,8 +284,8 @@ export async function analyzeUrl(targetUrl: string): Promise<AnalysisOutput> {
     throw new Error("Not HTML");
   }
 
-  const rawHtml = await res.text();
-  if (rawHtml.length > MAX_HTML_BYTES) throw new Error("Page too large");
+  const { text: rawHtml, truncated } = await readBodyLimited(res, MAX_HTML_BYTES);
+  if (truncated) throw new Error("Page too large");
 
   const $ = cheerio.load(rawHtml);
   const baseUrl = new URL(targetUrl).origin;

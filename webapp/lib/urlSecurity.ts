@@ -3,52 +3,24 @@
  * Protège contre SSRF, abus (longueur, schéma) et fuite d'identifiants.
  */
 
+import { isHostnameBlocked, unbracketHostname } from "./ssrf-guard";
+
 const MAX_URL_LENGTH = 2048;
 const ALLOWED_PROTOCOLS = ["http:", "https:"];
 
-/** Plages d'IP privées ou locales (RFC 1918, localhost, link-local, etc.) */
-const PRIVATE_IPV4_REGEX = /^(?:127\.|10\.|172\.(?:1[6-9]|2\d|3[01])\.|192\.168\.|169\.254\.|0\.)/;
-const LOCALHOST_REGEX = /^localhost$/i;
-const BRACKET_IPV6 = /^\[([^\]]+)\]$/;
-
-function isPrivateIPv4(host: string): boolean {
-  return PRIVATE_IPV4_REGEX.test(host) || LOCALHOST_REGEX.test(host);
-}
-
-function isPrivateIPv6(host: string): boolean {
-  const lower = host.toLowerCase();
-  // ::1, ::ffff:127.x, fe80:: (link-local), fc00:: (ULA)
-  return (
-    lower === "::1" ||
-    lower === "localhost" ||
-    lower.startsWith("::ffff:127.") ||
-    lower.startsWith("::ffff:10.") ||
-    lower.startsWith("::ffff:172.") ||
-    lower.startsWith("::ffff:192.168.") ||
-    lower.startsWith("fe80:") ||
-    lower.startsWith("fc") ||
-    lower.startsWith("fd")
-  );
+/**
+ * Vérification statique (sans DNS) du hostname. La résolution DNS et la
+ * revalidation des redirections sont faites par `safeFetch` (ssrf-guard.ts).
+ * L'ancienne implémentation par préfixes de chaînes laissait passer
+ * `[::ffff:7f00:1]`, 100.64.0.0/10, etc. et bloquait à tort des domaines
+ * publics commençant par "fc"/"fd" (ex. fcbarcelona.com).
+ */
+function isHostPrivate(hostname: string): boolean {
+  return isHostnameBlocked(hostname);
 }
 
 function getHostnameFromURL(u: URL): string {
-  const host = u.hostname;
-  const ipv6Match = host.match(BRACKET_IPV6);
-  return ipv6Match ? ipv6Match[1] : host;
-}
-
-function isHostPrivate(hostname: string): boolean {
-  const normalized = hostname.toLowerCase().trim();
-  if (isPrivateIPv4(normalized)) return true;
-  if (isPrivateIPv6(normalized)) return true;
-  // Hostname résolu en interne (ex. .local, .internal, .corp)
-  if (
-    normalized.endsWith(".local") ||
-    normalized.endsWith(".internal") ||
-    normalized.endsWith(".localhost")
-  )
-    return true;
-  return false;
+  return unbracketHostname(u.hostname);
 }
 
 export interface UrlValidationResult {

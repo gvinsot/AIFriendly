@@ -13,6 +13,7 @@ import { PrismaClient } from "@prisma/client";
 import * as cheerio from "cheerio";
 import { createHash } from "crypto";
 import { assertPatchedNodeRuntime, installBrotliSafeFetch } from "./lib/node-security.js";
+import { safeFetch, readBodyLimited } from "./lib/ssrf-guard.js";
 
 // Mitigation CVE-2026-111497 (Node2Shell) — voir webapp/lib/node-security.ts
 assertPatchedNodeRuntime("aifriendly-worker");
@@ -58,9 +59,10 @@ async function fetchTextFile(baseUrl: string, path: string): Promise<string | nu
     const fileUrl = new URL(path, baseUrl).href;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);
-    const res = await fetch(fileUrl, {
+    const res = await safeFetch(fileUrl, {
       signal: controller.signal,
       headers: { "User-Agent": "AIFriendly/1.0 (Worker)" },
+      maxBodyBytes: 50000,
     });
     clearTimeout(timeout);
     if (!res.ok) return null;
@@ -74,7 +76,7 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutM
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const res = await fetch(url, { ...options, signal: controller.signal });
+    const res = await safeFetch(url, { ...options, signal: controller.signal });
     clearTimeout(timeout);
     return res;
   } catch {
@@ -273,7 +275,7 @@ async function analyzeUrl(targetUrl: string, previousResult?: PreviousLLMResult)
   const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   let res: Response;
   try {
-    res = await fetch(targetUrl, {
+    res = await safeFetch(targetUrl, {
       signal: controller.signal,
       headers: { "User-Agent": "AIFriendly/1.0 (Worker; +https://aifriendly.eu)" },
       redirect: "follow",
@@ -286,8 +288,8 @@ async function analyzeUrl(targetUrl: string, previousResult?: PreviousLLMResult)
   const ct = res.headers.get("content-type") ?? "";
   if (!ct.includes("text/html") && !ct.includes("application/xhtml")) throw new Error("Not HTML");
 
-  const rawHtml = await res.text();
-  if (rawHtml.length > MAX_HTML_BYTES) throw new Error("Page too large");
+  const { text: rawHtml, truncated } = await readBodyLimited(res, MAX_HTML_BYTES);
+  if (truncated) throw new Error("Page too large");
 
   const $ = cheerio.load(rawHtml);
   const baseUrl = new URL(targetUrl).origin;
@@ -593,7 +595,7 @@ async function checkAvailability(targetUrl: string) {
     // Ping (HEAD request)
     const pingStart = performance.now();
     try {
-      await fetch(targetUrl, {
+      await safeFetch(targetUrl, {
         method: "HEAD", signal: controller.signal, redirect: "follow",
         headers: { "User-Agent": "AIFriendly/1.0 (AvailabilityCheck)" },
       });
@@ -610,7 +612,7 @@ async function checkAvailability(targetUrl: string) {
     // Full GET
     const loadStart = performance.now();
     try {
-      const fullRes = await fetch(targetUrl, {
+      const fullRes = await safeFetch(targetUrl, {
         method: "GET", signal: controller.signal, redirect: "follow",
         headers: { "User-Agent": "AIFriendly/1.0 (AvailabilityCheck)" },
       });
@@ -739,7 +741,7 @@ async function scanSecurity(targetUrl: string) {
   const timeout = setTimeout(() => controller.abort(), SECURITY_TIMEOUT_MS);
 
   try {
-    const res = await fetch(targetUrl, {
+    const res = await safeFetch(targetUrl, {
       signal: controller.signal, redirect: "follow",
       headers: { "User-Agent": "AIFriendly/1.0 (SecurityScan)" },
     });

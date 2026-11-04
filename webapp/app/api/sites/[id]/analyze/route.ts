@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/auth";
+import { requireSubscribedUser } from "@/lib/api-auth";
+import { SsrfBlockedError } from "@/lib/ssrf-guard";
 import { prisma } from "@/lib/prisma";
 import { analyzeUrl } from "@/lib/analyzer";
 
@@ -7,14 +8,12 @@ type RouteContext = { params: Promise<{ id: string }> };
 
 // POST /api/sites/:id/analyze — trigger manual analysis
 export async function POST(_req: NextRequest, context: RouteContext) {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
-  }
+  const guard = await requireSubscribedUser();
+  if (guard.response) return guard.response;
 
   const { id } = await context.params;
   const site = await prisma.site.findFirst({
-    where: { id, userId: session.user.id },
+    where: { id, userId: guard.userId },
   });
   if (!site) {
     return NextResponse.json({ error: "Site introuvable" }, { status: 404 });
@@ -47,6 +46,9 @@ export async function POST(_req: NextRequest, context: RouteContext) {
       createdAt: analysis.createdAt,
     });
   } catch (err) {
+    if (err instanceof SsrfBlockedError) {
+      return NextResponse.json({ error: "Cette URL n'est pas autorisée." }, { status: 400 });
+    }
     const message =
       err instanceof Error ? err.message : "Erreur lors de l'analyse.";
     return NextResponse.json({ error: message }, { status: 500 });

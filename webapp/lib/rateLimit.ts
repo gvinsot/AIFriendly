@@ -12,10 +12,29 @@ interface Entry {
 }
 
 const store = new Map<string, Entry>();
+/** Plafond d'entrées pour borner la mémoire même sous un flot d'IP distinctes. */
+const MAX_STORE_ENTRIES = 50_000;
+
+/**
+ * Nombre de reverse proxies de confiance devant l'application (Traefik = 1).
+ * Chaque proxy AJOUTE l'IP de son client à droite de X-Forwarded-For : seules
+ * les N dernières entrées sont fiables. L'ancienne implémentation prenait la
+ * PREMIÈRE entrée, entièrement contrôlée par le client : il suffisait d'envoyer
+ * un X-Forwarded-For aléatoire à chaque requête pour contourner la limite.
+ */
+const TRUSTED_PROXY_HOPS = Math.max(0, parseInt(process.env.TRUSTED_PROXY_HOPS ?? "1", 10) || 0);
 
 function getClientKey(forwardedFor: string | null, realIp: string | null): string {
-  const first = forwardedFor?.split(",")[0]?.trim() || realIp || "unknown";
-  return first;
+  if (TRUSTED_PROXY_HOPS > 0 && forwardedFor) {
+    const chain = forwardedFor
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    // IP vue par le proxy de confiance le plus externe
+    const ip = chain[Math.max(0, chain.length - TRUSTED_PROXY_HOPS)];
+    if (ip) return ip;
+  }
+  return realIp?.trim() || "unknown";
 }
 
 /**
@@ -44,6 +63,11 @@ export function checkRateLimit(request: Request): { allowed: true } | { allowed:
     return { allowed: true };
   }
 
+  if (store.size >= MAX_STORE_ENTRIES) cleanup();
+  if (store.size >= MAX_STORE_ENTRIES) {
+    // Saturation (attaque distribuée) : refuser plutôt que croître sans borne
+    return { allowed: false, retryAfterSeconds: Math.ceil(WINDOW_MS / 1000) };
+  }
   store.set(key, { count: 1, resetAt: now + WINDOW_MS });
   return { allowed: true };
 }

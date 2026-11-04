@@ -25,6 +25,7 @@ import {
   installBrotliSafeFetch,
   rejectBrotliRequestBody,
 } from "./lib/node-security.js";
+import { assertPublicUrl, SsrfBlockedError } from "./lib/ssrf-guard.js";
 
 // Mitigation CVE-2026-111497 (Node2Shell) — voir lib/node-security.ts
 assertPatchedNodeRuntime("aifriendly-mcp");
@@ -37,9 +38,28 @@ function hashKey(key: string): string {
   return createHash("sha256").update(key).digest("hex");
 }
 
+const MAX_URL_LENGTH = 2048;
+
+/**
+ * Valide une URL cible fournie par le client MCP (protocole, longueur,
+ * résolution DNS vers une IP publique). Retourne un message d'erreur ou null.
+ * La protection est aussi appliquée à chaque requête par safeFetch.
+ */
+async function checkTargetUrl(url: string): Promise<string | null> {
+  if (url.length > MAX_URL_LENGTH) return "URL too long.";
+  try {
+    await assertPublicUrl(url);
+    return null;
+  } catch (err) {
+    if (err instanceof SsrfBlockedError) return "URL not allowed (must be a public http(s) URL).";
+    return "Invalid URL.";
+  }
+}
+
 /**
  * Authenticate a request via Bearer token.
- * Returns the userId if valid, null otherwise.
+ * Returns the userId if the key is valid and its owner has an active
+ * subscription, null otherwise.
  */
 async function authenticateRequest(
   req: express.Request
@@ -51,8 +71,15 @@ async function authenticateRequest(
   if (!apiKey || !apiKey.startsWith("afk_")) return null;
 
   const keyHash = hashKey(apiKey);
-  const record = await prisma.apiKey.findUnique({ where: { keyHash } });
+  const record = await prisma.apiKey.findUnique({
+    where: { keyHash },
+    select: { id: true, userId: true, user: { select: { stripeCurrentPeriodEnd: true } } },
+  });
   if (!record) return null;
+
+  // L'accès MCP est réservé aux abonnés actifs (comme le dashboard)
+  const periodEnd = record.user.stripeCurrentPeriodEnd;
+  if (!periodEnd || periodEnd.getTime() <= Date.now()) return null;
 
   // Update last used timestamp (fire and forget)
   prisma.apiKey
@@ -181,6 +208,14 @@ function createMcpServerForUser(userId: string): McpServer {
         };
       }
 
+      const urlError = await checkTargetUrl(targetUrl);
+      if (urlError) {
+        return {
+          content: [{ type: "text" as const, text: `Error: ${urlError}` }],
+          isError: true,
+        };
+      }
+
       try {
         const result = await analyzeUrl(targetUrl);
 
@@ -257,6 +292,14 @@ function createMcpServerForUser(userId: string): McpServer {
               text: "Error: Provide either site_id or url.",
             },
           ],
+          isError: true,
+        };
+      }
+
+      const urlError = await checkTargetUrl(targetUrl);
+      if (urlError) {
+        return {
+          content: [{ type: "text" as const, text: `Error: ${urlError}` }],
           isError: true,
         };
       }
@@ -345,6 +388,14 @@ function createMcpServerForUser(userId: string): McpServer {
               text: "Error: Provide either site_id or url.",
             },
           ],
+          isError: true,
+        };
+      }
+
+      const urlError = await checkTargetUrl(targetUrl);
+      if (urlError) {
+        return {
+          content: [{ type: "text" as const, text: `Error: ${urlError}` }],
           isError: true,
         };
       }
@@ -506,7 +557,7 @@ app.post("/mcp", async (req, res) => {
   if (!userId) {
     res.status(401).json({
       jsonrpc: "2.0",
-      error: { code: -32001, message: "Invalid or missing API key" },
+      error: { code: -32001, message: "Invalid or missing API key, or no active subscription" },
       id: null,
     });
     return;
@@ -537,7 +588,7 @@ app.get("/mcp", async (req, res) => {
   if (!userId) {
     res.status(401).json({
       jsonrpc: "2.0",
-      error: { code: -32001, message: "Invalid or missing API key" },
+      error: { code: -32001, message: "Invalid or missing API key, or no active subscription" },
       id: null,
     });
     return;

@@ -15,6 +15,7 @@ RUN npx prisma generate --schema=./prisma/schema.prisma
 
 # Copy worker source
 COPY webapp/lib/node-security.ts ./lib/node-security.ts
+COPY webapp/lib/ssrf-guard.ts ./lib/ssrf-guard.ts
 COPY worker/index.ts ./index.ts
 COPY worker/tsconfig.json ./tsconfig.json
 

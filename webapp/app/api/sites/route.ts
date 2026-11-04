@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { requireSubscribedUser, readJsonObject } from "@/lib/api-auth";
+import { validateAndNormalizeUrl } from "@/lib/urlSecurity";
+
+const MAX_SITE_NAME_LENGTH = 100;
 
 // GET /api/sites — list current user's sites
 export async function GET() {
@@ -37,16 +41,16 @@ export async function GET() {
 
 // POST /api/sites — create a new site
 export async function POST(request: Request) {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
-  }
+  const guard = await requireSubscribedUser();
+  if (guard.response) return guard.response;
+  const userId = guard.userId;
 
-  const body = await request.json();
-  const { name, url } = body as {
-    name?: string;
-    url?: string;
-  };
+  const body = await readJsonObject(request);
+  if (!body) {
+    return NextResponse.json({ error: "Corps de requête JSON invalide." }, { status: 400 });
+  }
+  const name = typeof body.name === "string" ? body.name : undefined;
+  const url = typeof body.url === "string" ? body.url : undefined;
 
   if (!name?.trim() || !url?.trim()) {
     return NextResponse.json(
@@ -56,12 +60,9 @@ export async function POST(request: Request) {
   }
 
   // Limit to 20 sites per user
-  const count = await prisma.site.count({
-    where: { userId: session.user.id },
-  });
-  if (count >= 20) {
+  if (name.trim().length > MAX_SITE_NAME_LENGTH) {
     return NextResponse.json(
-      { error: "Limite de 20 sites atteinte." },
+      { error: `Le nom ne doit pas dépasser ${MAX_SITE_NAME_LENGTH} caractères.` },
       { status: 400 }
     );
   }
@@ -70,10 +71,25 @@ export async function POST(request: Request) {
   if (!/^https?:\/\//i.test(normalizedUrl)) {
     normalizedUrl = `https://${normalizedUrl}`;
   }
+  // Empêche d'enregistrer une cible interne (SSRF via le worker / scans)
+  const validation = validateAndNormalizeUrl(normalizedUrl);
+  if (!validation.ok) {
+    return NextResponse.json({ error: validation.error }, { status: 400 });
+  }
+
+  const count = await prisma.site.count({
+    where: { userId },
+  });
+  if (count >= 20) {
+    return NextResponse.json(
+      { error: "Limite de 20 sites atteinte." },
+      { status: 400 }
+    );
+  }
 
   const site = await prisma.site.create({
     data: {
-      userId: session.user.id,
+      userId,
       name: name.trim(),
       url: normalizedUrl,
     },

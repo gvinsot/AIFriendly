@@ -5,6 +5,7 @@
  */
 
 import * as cheerio from "cheerio";
+import { safeFetch } from "./ssrf-guard";
 
 const SECURITY_TIMEOUT_MS = 60000;
 
@@ -37,7 +38,7 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutM
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const res = await fetch(url, { ...options, signal: controller.signal });
+    const res = await safeFetch(url, { ...options, signal: controller.signal });
     clearTimeout(timeout);
     return res;
   } catch {
@@ -63,7 +64,7 @@ export async function scanSecurity(targetUrl: string): Promise<SecurityScanResul
 
   try {
     // Main request to get headers, cookies, and HTML
-    const res = await fetch(targetUrl, {
+    const res = await safeFetch(targetUrl, {
       signal: controller.signal,
       redirect: "follow",
       headers: { "User-Agent": "AIFriendly/1.0 (SecurityScan)" },
