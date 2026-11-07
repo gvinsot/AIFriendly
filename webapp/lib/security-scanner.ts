@@ -1,7 +1,14 @@
 /**
- * Security Scanner — Comprehensive OWASP-based security audit
- * 50+ tests across 5 categories: headers, SSL/TLS, cookies, info leaks, injection/XSS
- * Returns a score out of 10 with sub-scores by category.
+ * Security Scanner — audit de sécurité basé sur les recommandations OWASP / Mozilla.
+ * 5 catégories : headers, SSL/TLS, cookies, fuites d'information, injection/XSS.
+ * Retourne un score sur 10 et un sous-score par catégorie.
+ *
+ * Partagé par la webapp, le worker (scans planifiés) et le serveur MCP : tous
+ * exécutent exactement les mêmes tests.
+ *
+ * Principes : ne pénaliser que ce qui a un impact réel (en-têtes obsolètes non
+ * exigés, signatures vérifiées contre la page normale, soft 404 écartés), et
+ * graduer la sévérité selon le contexte (cookie de session ou non, HTTPS…).
  */
 
 import * as cheerio from "cheerio";
@@ -63,6 +70,36 @@ function addTest(tests: SecurityTestResult[], test: SecurityTestResult) {
   tests.push(test);
 }
 
+/** Découpe une CSP en directives : { "script-src": ["'self'", "https://cdn.x"] }. */
+function parseCsp(policy: string): Record<string, string[]> {
+  const directives: Record<string, string[]> = {};
+  for (const part of policy.split(";")) {
+    const [name, ...values] = part.trim().split(/\s+/);
+    // Une directive répétée est ignorée par les navigateurs : seule la première compte.
+    if (name && !(name.toLowerCase() in directives)) directives[name.toLowerCase()] = values;
+  }
+  return directives;
+}
+
+/** Hôte d'une URL (absolue ou relative à `base`), ou null si invalide. */
+function hostOf(url: string, base: string): string | null {
+  try {
+    return new URL(url, base).hostname.toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
+/** `host` est le site lui-même ou un de ses sous-domaines (ex. cdn.example.com pour example.com). */
+function isSameSite(host: string | null, siteHost: string): boolean {
+  if (!host) return true;
+  const root = siteHost.replace(/^www\./, "");
+  return host === siteHost || host === root || host.endsWith(`.${root}`);
+}
+
+/** Nom de cookie typique d'une session / d'un jeton d'authentification. */
+const SESSION_COOKIE_RE = /sess|sid\b|^sid|token|auth|jwt|login|remember/i;
+
 export async function scanSecurity(targetUrl: string): Promise<SecurityScanResult> {
   const tests: SecurityTestResult[] = [];
   let headersScore = 10;
@@ -85,106 +122,150 @@ export async function scanSecurity(targetUrl: string): Promise<SecurityScanResul
     const headers = res.headers;
     const html = await res.text();
     const $ = cheerio.load(html);
-    const baseUrl = new URL(targetUrl).origin;
+    // URL finale après redirections : c'est elle qui détermine si la page est servie en HTTPS.
+    const finalUrl = res.url || targetUrl;
+    const isHttps = finalUrl.startsWith("https://");
+    const siteHost = new URL(finalUrl).hostname;
+    const baseUrl = new URL(finalUrl).origin;
+    const setCookies = res.headers.getSetCookie?.() || [];
+
+    // CSP : en-tête HTTP, ou à défaut balise <meta http-equiv> (qui ne supporte pas frame-ancestors).
+    const metaCsp = $('meta[http-equiv="Content-Security-Policy" i]').attr("content") || null;
+    const cspReportOnly = headers.get("content-security-policy-report-only");
+    const cspDirectives = parseCsp(headers.get("content-security-policy") || metaCsp || "");
 
     // ═══════════════════════════════════════════
     // CATEGORY 1: Security Headers (15 tests)
     // ═══════════════════════════════════════════
 
     // 1.1 Content-Security-Policy
-    const csp = headers.get("content-security-policy");
+    const csp = headers.get("content-security-policy") || metaCsp;
     if (!csp) {
-      headersScore -= 1.5;
+      const ded = cspReportOnly ? 1 : 1.5;
+      headersScore -= ded;
       addTest(tests, {
         id: "csp-missing", name: "Content-Security-Policy", category: "headers",
-        status: "fail", severity: "critical", value: "Absent",
-        recommendation: "Ajoutez un header Content-Security-Policy pour prévenir les attaques XSS et injection de contenu.",
-        deduction: 1.5,
+        status: "fail", severity: "critical",
+        value: cspReportOnly ? "Uniquement en mode Report-Only (non appliquée)" : "Absent",
+        recommendation: cspReportOnly
+          ? "Passez la CSP de Content-Security-Policy-Report-Only à Content-Security-Policy une fois les rapports vérifiés."
+          : "Ajoutez un header Content-Security-Policy pour prévenir les attaques XSS et injection de contenu.",
+        deduction: ded,
       });
     } else {
       addTest(tests, {
         id: "csp-present", name: "Content-Security-Policy", category: "headers",
-        status: "pass", severity: "info", value: csp.slice(0, 100) + (csp.length > 100 ? "..." : ""),
+        status: "pass", severity: "info",
+        value: (headers.get("content-security-policy") ? "" : "(balise meta) ") + csp.slice(0, 100) + (csp.length > 100 ? "..." : ""),
         deduction: 0,
       });
 
-      // 1.1b CSP unsafe-inline check
-      if (csp.includes("unsafe-inline")) {
+      // Les scripts sont régis par script-src, ou à défaut default-src.
+      const scriptSrc = cspDirectives["script-src"] ?? cspDirectives["default-src"];
+      const hasNonceOrHash = !!scriptSrc?.some((v) => /^'(nonce-|sha(256|384|512)-)/.test(v));
+      const hasStrictDynamic = !!scriptSrc?.includes("'strict-dynamic'");
+
+      if (!scriptSrc) {
         headersScore -= 0.5;
         addTest(tests, {
-          id: "csp-unsafe-inline", name: "CSP: unsafe-inline détecté", category: "headers",
-          status: "warning", severity: "warning", value: "La directive 'unsafe-inline' affaiblit la protection XSS",
-          recommendation: "Remplacez 'unsafe-inline' par des nonces ou hashes dans votre CSP.",
+          id: "csp-no-script-src", name: "CSP: scripts non restreints", category: "headers",
+          status: "warning", severity: "warning", value: "Ni script-src ni default-src ne sont définis",
+          recommendation: "Ajoutez une directive script-src (ou default-src) pour restreindre l'origine des scripts.",
           deduction: 0.5,
-        });
-      }
-
-      // 1.1c CSP unsafe-eval check
-      if (csp.includes("unsafe-eval")) {
-        headersScore -= 0.5;
-        addTest(tests, {
-          id: "csp-unsafe-eval", name: "CSP: unsafe-eval détecté", category: "headers",
-          status: "warning", severity: "warning", value: "La directive 'unsafe-eval' permet l'exécution de code dynamique",
-          recommendation: "Supprimez 'unsafe-eval' de votre CSP et refactorisez le code utilisant eval().",
-          deduction: 0.5,
-        });
-      }
-
-      // 1.1d CSP wildcard check
-      if (csp.includes("* ") || csp.includes(" *") || csp.match(/:\s*\*/)) {
-        headersScore -= 0.3;
-        addTest(tests, {
-          id: "csp-wildcard", name: "CSP: wildcard détecté", category: "headers",
-          status: "warning", severity: "warning", value: "Un wildcard (*) dans le CSP autorise toutes les sources",
-          recommendation: "Restreignez les sources autorisées dans votre CSP au lieu d'utiliser des wildcards.",
-          deduction: 0.3,
-        });
-      }
-
-      // 1.1e CSP frame-ancestors (clickjacking via CSP)
-      if (!csp.includes("frame-ancestors")) {
-        headersScore -= 0.2;
-        addTest(tests, {
-          id: "csp-no-frame-ancestors", name: "CSP: frame-ancestors absent", category: "headers",
-          status: "warning", severity: "info", value: "La directive frame-ancestors n'est pas définie",
-          recommendation: "Ajoutez 'frame-ancestors self' dans votre CSP pour une protection anti-clickjacking moderne.",
-          deduction: 0.2,
-        });
-      }
-    }
-
-    // 1.2 X-Frame-Options
-    const xfo = headers.get("x-frame-options");
-    if (!xfo) {
-      headersScore -= 1;
-      addTest(tests, {
-        id: "xfo-missing", name: "X-Frame-Options", category: "headers",
-        status: "fail", severity: "critical", value: "Absent — vulnérable au clickjacking",
-        recommendation: "Ajoutez X-Frame-Options: DENY ou SAMEORIGIN.",
-        deduction: 1,
-      });
-    } else {
-      const xfoVal = xfo.toUpperCase();
-      if (xfoVal !== "DENY" && xfoVal !== "SAMEORIGIN") {
-        headersScore -= 0.3;
-        addTest(tests, {
-          id: "xfo-weak", name: "X-Frame-Options", category: "headers",
-          status: "warning", severity: "warning", value: `Valeur non standard: ${xfo}`,
-          recommendation: "Utilisez X-Frame-Options: DENY ou SAMEORIGIN.",
-          deduction: 0.3,
         });
       } else {
+        // 1.1b unsafe-inline : ignoré par les navigateurs si un nonce/hash est présent (CSP niveau 2+).
+        if (scriptSrc.includes("'unsafe-inline'") && !hasNonceOrHash) {
+          headersScore -= 0.5;
+          addTest(tests, {
+            id: "csp-unsafe-inline", name: "CSP: unsafe-inline dans script-src", category: "headers",
+            status: "warning", severity: "warning", value: "'unsafe-inline' autorise tout script inline",
+            recommendation: "Remplacez 'unsafe-inline' par des nonces ou hashes dans script-src.",
+            deduction: 0.5,
+          });
+        }
+        // 1.1c unsafe-eval
+        if (scriptSrc.includes("'unsafe-eval'")) {
+          headersScore -= 0.3;
+          addTest(tests, {
+            id: "csp-unsafe-eval", name: "CSP: unsafe-eval dans script-src", category: "headers",
+            status: "warning", severity: "warning", value: "'unsafe-eval' permet l'exécution de code dynamique",
+            recommendation: "Supprimez 'unsafe-eval' de script-src et évitez eval()/new Function().",
+            deduction: 0.3,
+          });
+        }
+        // 1.1d Sources trop larges pour les scripts (sans effet si 'strict-dynamic')
+        const broad = scriptSrc.filter((v) => v === "*" || v === "http:" || v === "https:" || v === "data:");
+        if (broad.length > 0 && !hasStrictDynamic) {
+          headersScore -= 0.3;
+          addTest(tests, {
+            id: "csp-wildcard", name: "CSP: sources de scripts trop larges", category: "headers",
+            status: "warning", severity: "warning", value: `script-src autorise ${broad.join(" ")}`,
+            recommendation: "Listez explicitement les domaines autorisés dans script-src au lieu de *, https: ou data:.",
+            deduction: 0.3,
+          });
+        }
+      }
+
+      // object-src / base-uri : recommandés par les guides CSP stricts.
+      const objectSrc = cspDirectives["object-src"] ?? cspDirectives["default-src"];
+      if (!objectSrc || !objectSrc.includes("'none'")) {
         addTest(tests, {
-          id: "xfo-present", name: "X-Frame-Options", category: "headers",
-          status: "pass", severity: "info", value: xfo,
+          id: "csp-object-src", name: "CSP: object-src", category: "headers",
+          status: "warning", severity: "info", value: objectSrc ? objectSrc.join(" ") : "Non défini",
+          recommendation: "Ajoutez object-src 'none' à votre CSP.",
+          deduction: 0.1,
+        });
+        headersScore -= 0.1;
+      }
+      if (!cspDirectives["base-uri"]) {
+        addTest(tests, {
+          id: "csp-base-uri", name: "CSP: base-uri", category: "headers",
+          status: "warning", severity: "info", value: "Non défini",
+          recommendation: "Ajoutez base-uri 'self' (ou 'none') pour empêcher l'injection de balise <base>.",
           deduction: 0,
         });
       }
     }
 
+    // 1.2 Protection anti-clickjacking : CSP frame-ancestors (moderne) ou X-Frame-Options
+    const xfo = headers.get("x-frame-options");
+    const frameAncestors = headers.get("content-security-policy") ? cspDirectives["frame-ancestors"] : undefined;
+    const xfoVal = xfo?.trim().toUpperCase();
+    const xfoValid = xfoVal === "DENY" || xfoVal === "SAMEORIGIN";
+    if (frameAncestors && !frameAncestors.includes("*")) {
+      addTest(tests, {
+        id: "xfo-present", name: "Protection anti-clickjacking", category: "headers",
+        status: "pass", severity: "info", value: `CSP frame-ancestors ${frameAncestors.join(" ")}`,
+        deduction: 0,
+      });
+    } else if (xfoValid) {
+      addTest(tests, {
+        id: "xfo-present", name: "Protection anti-clickjacking", category: "headers",
+        status: "pass", severity: "info", value: `X-Frame-Options: ${xfo}`,
+        deduction: 0,
+      });
+    } else if (xfo) {
+      headersScore -= 0.5;
+      addTest(tests, {
+        id: "xfo-weak", name: "X-Frame-Options", category: "headers",
+        status: "warning", severity: "warning", value: `Valeur non standard (ignorée par les navigateurs): ${xfo}`,
+        recommendation: "Utilisez X-Frame-Options: DENY ou SAMEORIGIN, ou CSP frame-ancestors 'self'.",
+        deduction: 0.5,
+      });
+    } else {
+      headersScore -= 1;
+      addTest(tests, {
+        id: "xfo-missing", name: "Protection anti-clickjacking", category: "headers",
+        status: "fail", severity: "critical", value: "Ni X-Frame-Options ni CSP frame-ancestors — vulnérable au clickjacking",
+        recommendation: "Ajoutez Content-Security-Policy: frame-ancestors 'self' (ou X-Frame-Options: SAMEORIGIN).",
+        deduction: 1,
+      });
+    }
+
     // 1.3 X-Content-Type-Options
     const xcto = headers.get("x-content-type-options");
-    if (!xcto || xcto !== "nosniff") {
+    if (!xcto || xcto.trim().toLowerCase() !== "nosniff") {
       headersScore -= 0.5;
       addTest(tests, {
         id: "xcto-missing", name: "X-Content-Type-Options", category: "headers",
@@ -201,8 +282,11 @@ export async function scanSecurity(targetUrl: string): Promise<SecurityScanResul
     }
 
     // 1.4 Strict-Transport-Security
-    const hsts = headers.get("strict-transport-security");
-    if (!hsts) {
+    // (ignoré par les navigateurs sur HTTP : l'absence de HTTPS est déjà pénalisée en SSL/TLS)
+    const hsts = isHttps ? headers.get("strict-transport-security") : null;
+    if (!isHttps) {
+      // rien : voir la catégorie SSL/TLS
+    } else if (!hsts) {
       headersScore -= 1;
       addTest(tests, {
         id: "hsts-missing", name: "Strict-Transport-Security", category: "headers",
@@ -251,20 +335,20 @@ export async function scanSecurity(targetUrl: string): Promise<SecurityScanResul
       }
     }
 
-    // 1.5 X-XSS-Protection
+    // 1.5 X-XSS-Protection — obsolète : le filtre XSS a été retiré des navigateurs et
+    // « 1 » pouvait introduire des fuites (XS-Leak). Recommandation actuelle : absent ou « 0 ».
     const xxss = headers.get("x-xss-protection");
-    if (!xxss) {
-      headersScore -= 0.3;
+    if (xxss && /^\s*1/.test(xxss)) {
       addTest(tests, {
-        id: "xxss-missing", name: "X-XSS-Protection", category: "headers",
-        status: "warning", severity: "warning", value: "Absent",
-        recommendation: "Ajoutez X-XSS-Protection: 1; mode=block (ou 0 si CSP est bien configuré).",
-        deduction: 0.3,
+        id: "xxss-legacy", name: "X-XSS-Protection", category: "headers",
+        status: "warning", severity: "info", value: xxss,
+        recommendation: "X-XSS-Protection est obsolète : utilisez X-XSS-Protection: 0 (ou supprimez-le) et appuyez-vous sur la CSP.",
+        deduction: 0,
       });
     } else {
       addTest(tests, {
-        id: "xxss-present", name: "X-XSS-Protection", category: "headers",
-        status: "pass", severity: "info", value: xxss,
+        id: "xxss-ok", name: "X-XSS-Protection", category: "headers",
+        status: "pass", severity: "info", value: xxss || "Absent (comportement recommandé, en-tête obsolète)",
         deduction: 0,
       });
     }
@@ -281,7 +365,9 @@ export async function scanSecurity(targetUrl: string): Promise<SecurityScanResul
       });
     } else {
       const weakPolicies = ["unsafe-url", "no-referrer-when-downgrade"];
-      if (weakPolicies.includes(referrer.toLowerCase())) {
+      // Plusieurs valeurs possibles (repli) : le navigateur applique la dernière qu'il comprend.
+      const effectiveReferrer = referrer.split(",").map((v) => v.trim().toLowerCase()).filter(Boolean).pop() || "";
+      if (weakPolicies.includes(effectiveReferrer)) {
         headersScore -= 0.2;
         addTest(tests, {
           id: "referrer-weak", name: "Referrer-Policy", category: "headers",
@@ -301,12 +387,12 @@ export async function scanSecurity(targetUrl: string): Promise<SecurityScanResul
     // 1.7 Permissions-Policy
     const permissions = headers.get("permissions-policy");
     if (!permissions) {
-      headersScore -= 0.3;
+      headersScore -= 0.2;
       addTest(tests, {
         id: "permissions-missing", name: "Permissions-Policy", category: "headers",
         status: "warning", severity: "info", value: "Absent",
         recommendation: "Ajoutez un header Permissions-Policy pour restreindre les API navigateur (camera, microphone, geolocation, etc.).",
-        deduction: 0.3,
+        deduction: 0.2,
       });
     } else {
       addTest(tests, {
@@ -316,33 +402,15 @@ export async function scanSecurity(targetUrl: string): Promise<SecurityScanResul
       });
     }
 
-    // 1.8 Cross-Origin-Embedder-Policy (COEP)
-    const coep = headers.get("cross-origin-embedder-policy");
-    if (!coep) {
-      headersScore -= 0.2;
-      addTest(tests, {
-        id: "coep-missing", name: "Cross-Origin-Embedder-Policy", category: "headers",
-        status: "warning", severity: "info", value: "Absent",
-        recommendation: "Ajoutez Cross-Origin-Embedder-Policy: require-corp pour activer l'isolation cross-origin.",
-        deduction: 0.2,
-      });
-    } else {
-      addTest(tests, {
-        id: "coep-present", name: "Cross-Origin-Embedder-Policy", category: "headers",
-        status: "pass", severity: "info", value: coep,
-        deduction: 0,
-      });
-    }
-
-    // 1.9 Cross-Origin-Opener-Policy (COOP)
+    // 1.8 Cross-Origin-Opener-Policy (COOP) — isole la fenêtre des popups cross-origin.
     const coop = headers.get("cross-origin-opener-policy");
     if (!coop) {
-      headersScore -= 0.2;
+      headersScore -= 0.1;
       addTest(tests, {
         id: "coop-missing", name: "Cross-Origin-Opener-Policy", category: "headers",
         status: "warning", severity: "info", value: "Absent",
-        recommendation: "Ajoutez Cross-Origin-Opener-Policy: same-origin pour isoler le contexte de navigation.",
-        deduction: 0.2,
+        recommendation: "Ajoutez Cross-Origin-Opener-Policy: same-origin (ou same-origin-allow-popups) pour isoler le contexte de navigation.",
+        deduction: 0.1,
       });
     } else {
       addTest(tests, {
@@ -352,94 +420,40 @@ export async function scanSecurity(targetUrl: string): Promise<SecurityScanResul
       });
     }
 
-    // 1.10 Cross-Origin-Resource-Policy (CORP)
+    // COEP / CORP : utiles seulement pour l'isolation cross-origin ou les ressources
+    // (pas pour une page HTML publique). Information, sans pénalité.
+    const coep = headers.get("cross-origin-embedder-policy");
     const corp = headers.get("cross-origin-resource-policy");
-    if (!corp) {
-      headersScore -= 0.2;
+    if (coep || corp) {
       addTest(tests, {
-        id: "corp-missing", name: "Cross-Origin-Resource-Policy", category: "headers",
-        status: "warning", severity: "info", value: "Absent",
-        recommendation: "Ajoutez Cross-Origin-Resource-Policy: same-origin pour empêcher le chargement cross-origin non autorisé.",
-        deduction: 0.2,
-      });
-    } else {
-      addTest(tests, {
-        id: "corp-present", name: "Cross-Origin-Resource-Policy", category: "headers",
-        status: "pass", severity: "info", value: corp,
+        id: "cross-origin-isolation", name: "COEP / CORP", category: "headers",
+        status: "pass", severity: "info",
+        value: [coep && `COEP: ${coep}`, corp && `CORP: ${corp}`].filter(Boolean).join(", "),
         deduction: 0,
       });
     }
 
-    // 1.11 X-Permitted-Cross-Domain-Policies
-    const xpcdp = headers.get("x-permitted-cross-domain-policies");
-    if (!xpcdp) {
-      headersScore -= 0.1;
+    // 1.9 Cache-Control : important uniquement si la réponse est personnalisée (cookies posés),
+    // sinon un cache partagé pourrait servir les données d'un utilisateur à un autre.
+    const cacheControl = (headers.get("cache-control") || "").toLowerCase();
+    if (setCookies.length > 0 && !/no-store|private/.test(cacheControl)) {
+      headersScore -= 0.3;
       addTest(tests, {
-        id: "xpcdp-missing", name: "X-Permitted-Cross-Domain-Policies", category: "headers",
-        status: "warning", severity: "info", value: "Absent",
-        recommendation: "Ajoutez X-Permitted-Cross-Domain-Policies: none pour bloquer Flash/PDF cross-domain.",
-        deduction: 0.1,
-      });
-    } else {
-      addTest(tests, {
-        id: "xpcdp-present", name: "X-Permitted-Cross-Domain-Policies", category: "headers",
-        status: "pass", severity: "info", value: xpcdp,
-        deduction: 0,
+        id: "cache-control-weak", name: "Cache-Control (réponse avec cookies)", category: "headers",
+        status: "warning", severity: "warning", value: cacheControl || "Absent",
+        recommendation: "La page pose des cookies : utilisez Cache-Control: private ou no-store pour éviter sa mise en cache par un proxy/CDN partagé.",
+        deduction: 0.3,
       });
     }
 
-    // 1.12 X-Download-Options
-    const xdo = headers.get("x-download-options");
-    if (!xdo) {
-      headersScore -= 0.1;
-      addTest(tests, {
-        id: "xdo-missing", name: "X-Download-Options", category: "headers",
-        status: "warning", severity: "info", value: "Absent",
-        recommendation: "Ajoutez X-Download-Options: noopen pour empêcher l'exécution automatique des téléchargements dans IE.",
-        deduction: 0.1,
-      });
-    } else {
-      addTest(tests, {
-        id: "xdo-present", name: "X-Download-Options", category: "headers",
-        status: "pass", severity: "info", value: xdo,
-        deduction: 0,
-      });
-    }
-
-    // 1.13 Cache-Control for sensitive pages
-    const cacheControl = headers.get("cache-control");
-    if (!cacheControl || (!cacheControl.includes("no-store") && !cacheControl.includes("private"))) {
-      headersScore -= 0.2;
-      addTest(tests, {
-        id: "cache-control-weak", name: "Cache-Control", category: "headers",
-        status: "warning", severity: "info", value: cacheControl || "Absent",
-        recommendation: "Utilisez Cache-Control: no-store ou private pour les pages sensibles afin d'empêcher la mise en cache de données privées.",
-        deduction: 0.2,
-      });
-    } else {
-      addTest(tests, {
-        id: "cache-control-ok", name: "Cache-Control", category: "headers",
-        status: "pass", severity: "info", value: cacheControl,
-        deduction: 0,
-      });
-    }
-
-    // 1.14 Expect-CT (Certificate Transparency)
-    const expectCt = headers.get("expect-ct");
-    if (targetUrl.startsWith("https://") && !expectCt) {
-      addTest(tests, {
-        id: "expect-ct-missing", name: "Expect-CT", category: "headers",
-        status: "warning", severity: "info", value: "Absent (facultatif mais recommandé)",
-        recommendation: "Ajoutez Expect-CT: max-age=86400, enforce pour garantir la transparence des certificats.",
-        deduction: 0,
-      });
-    }
+    // X-Download-Options (IE uniquement), X-Permitted-Cross-Domain-Policies (Flash/PDF)
+    // et Expect-CT (retiré des navigateurs, CT appliquée par défaut) sont obsolètes : non testés.
 
     // ═══════════════════════════════════════════
     // CATEGORY 2: SSL/TLS (6 tests)
     // ═══════════════════════════════════════════
 
-    if (targetUrl.startsWith("https://")) {
+    if (isHttps) {
       // 2.1 HTTPS present
       addTest(tests, {
         id: "ssl-https", name: "HTTPS", category: "ssl",
@@ -448,14 +462,22 @@ export async function scanSecurity(targetUrl: string): Promise<SecurityScanResul
       });
 
       // 2.2 HTTP redirect to HTTPS
-      const httpUrl = targetUrl.replace("https://", "http://");
-      const httpRes = await fetchWithTimeout(httpUrl, {
-        redirect: "manual",
-        headers: { "User-Agent": "AIFriendly/1.0 (SecurityScan)" },
-      });
+      // Suit jusqu'à 5 sauts (ex. http://site → http://www.site → https://www.site).
+      let hopUrl = finalUrl.replace("https://", "http://");
+      let httpRes: Response | null = null;
+      let location = "";
+      for (let hop = 0; hop < 5; hop++) {
+        httpRes = await fetchWithTimeout(hopUrl, {
+          redirect: "manual",
+          headers: { "User-Agent": "AIFriendly/1.0 (SecurityScan)" },
+        });
+        if (!httpRes || httpRes.status < 300 || httpRes.status >= 400) break;
+        location = new URL(httpRes.headers.get("location") || "", hopUrl).href;
+        if (location.startsWith("https://")) break;
+        hopUrl = location;
+      }
       if (httpRes) {
-        const location = httpRes.headers.get("location") || "";
-        if (httpRes.status >= 300 && httpRes.status < 400 && location.startsWith("https://")) {
+        if (location.startsWith("https://")) {
           addTest(tests, {
             id: "http-redirect", name: "Redirection HTTP → HTTPS", category: "ssl",
             status: "pass", severity: "info", value: `${httpRes.status} → ${location.slice(0, 80)}`,
@@ -473,23 +495,52 @@ export async function scanSecurity(targetUrl: string): Promise<SecurityScanResul
       }
 
       // 2.3 Mixed content detection
-      const httpResources: string[] = [];
-      $("script[src], link[href], img[src], iframe[src], video[src], audio[src], source[src], object[data]").each((_, el) => {
-        const src = $(el).attr("src") || $(el).attr("href") || $(el).attr("data") || "";
-        if (src.startsWith("http://") && !src.includes("localhost")) {
-          httpResources.push(src.slice(0, 80));
-        }
+      // Actif (scripts, styles, iframes, objets) : bloqué par les navigateurs et dangereux.
+      // Passif (images, médias) : mis à niveau automatiquement en HTTPS par les navigateurs récents.
+      const activeHttp: string[] = [];
+      const passiveHttp: string[] = [];
+      const isHttpUrl = (u?: string) => !!u && /^http:\/\//i.test(u.trim()) && !/^http:\/\/(localhost|127\.)/i.test(u.trim());
+      $("script[src], iframe[src], object[data], embed[src]").each((_, el) => {
+        const src = $(el).attr("src") || $(el).attr("data");
+        if (isHttpUrl(src)) activeHttp.push(src!.slice(0, 80));
       });
-      if (httpResources.length > 0) {
+      // Seuls les <link> qui chargent réellement une ressource (pas canonical/alternate/preconnect…).
+      $("link[href]").each((_, el) => {
+        const rel = ($(el).attr("rel") || "").toLowerCase();
+        const href = $(el).attr("href");
+        if (/stylesheet|preload|modulepreload|manifest/.test(rel) && isHttpUrl(href)) activeHttp.push(href!.slice(0, 80));
+        else if (/icon/.test(rel) && isHttpUrl(href)) passiveHttp.push(href!.slice(0, 80));
+      });
+      $("img[src], video[src], audio[src], source[src]").each((_, el) => {
+        const src = $(el).attr("src");
+        if (isHttpUrl(src)) passiveHttp.push(src!.slice(0, 80));
+      });
+      // Formulaire HTTPS qui envoie ses données en clair
+      $("form[action]").each((_, el) => {
+        const action = $(el).attr("action");
+        if (isHttpUrl(action)) activeHttp.push(`form → ${action!.slice(0, 70)}`);
+      });
+      if (activeHttp.length > 0) {
         sslScore -= 1.5;
         addTest(tests, {
-          id: "mixed-content", name: "Contenu mixte (HTTP sur HTTPS)", category: "ssl",
+          id: "mixed-content", name: "Contenu mixte actif (HTTP sur HTTPS)", category: "ssl",
           status: "fail", severity: "critical",
-          value: `${httpResources.length} ressource(s) HTTP chargée(s) sur une page HTTPS: ${httpResources.slice(0, 3).join(", ")}${httpResources.length > 3 ? "..." : ""}`,
-          recommendation: "Chargez toutes les ressources via HTTPS pour éviter les attaques MitM.",
+          value: `${activeHttp.length} ressource(s) active(s) en HTTP: ${activeHttp.slice(0, 3).join(", ")}${activeHttp.length > 3 ? "..." : ""}`,
+          recommendation: "Chargez scripts, styles, iframes et cibles de formulaires via HTTPS (sinon bloqués par le navigateur ou interceptables).",
           deduction: 1.5,
         });
-      } else {
+      }
+      if (passiveHttp.length > 0) {
+        sslScore -= 0.3;
+        addTest(tests, {
+          id: "mixed-content-passive", name: "Contenu mixte passif (images/médias HTTP)", category: "ssl",
+          status: "warning", severity: "warning",
+          value: `${passiveHttp.length} ressource(s) passive(s) en HTTP: ${passiveHttp.slice(0, 3).join(", ")}${passiveHttp.length > 3 ? "..." : ""}`,
+          recommendation: "Servez images et médias en HTTPS, ou ajoutez la directive CSP upgrade-insecure-requests.",
+          deduction: 0.3,
+        });
+      }
+      if (activeHttp.length === 0 && passiveHttp.length === 0) {
         addTest(tests, {
           id: "no-mixed-content", name: "Contenu mixte", category: "ssl",
           status: "pass", severity: "info", value: "Aucune ressource HTTP détectée sur la page HTTPS",
@@ -497,40 +548,33 @@ export async function scanSecurity(targetUrl: string): Promise<SecurityScanResul
         });
       }
 
-      // 2.4 Subresource Integrity (SRI) for external scripts
-      let externalScriptsNoSri = 0;
-      let totalExternalScripts = 0;
-      $("script[src]").each((_, el) => {
-        const src = $(el).attr("src") || "";
-        if (src.startsWith("http") && !src.includes(new URL(targetUrl).hostname)) {
-          totalExternalScripts++;
-          if (!$(el).attr("integrity")) {
-            externalScriptsNoSri++;
-          }
-        }
+      // 2.4 Subresource Integrity (SRI) for third-party scripts/styles
+      // (les feuilles générées dynamiquement, ex. Google Fonts, ne peuvent pas avoir de hash fixe)
+      const DYNAMIC_CSS_HOSTS = /(^|\.)fonts\.googleapis\.com$|(^|\.)use\.typekit\.net$/;
+      let externalNoSri = 0;
+      let totalExternal = 0;
+      $("script[src], link[rel~='stylesheet' i][href]").each((_, el) => {
+        const url = $(el).attr("src") || $(el).attr("href") || "";
+        if (!/^(https?:)?\/\//i.test(url)) return; // relative = même origine
+        const host = hostOf(url, finalUrl);
+        if (isSameSite(host, siteHost)) return;
+        if (el.tagName === "link" && host && DYNAMIC_CSS_HOSTS.test(host)) return;
+        totalExternal++;
+        if (!$(el).attr("integrity")) externalNoSri++;
       });
-      $("link[rel='stylesheet'][href]").each((_, el) => {
-        const href = $(el).attr("href") || "";
-        if (href.startsWith("http") && !href.includes(new URL(targetUrl).hostname)) {
-          totalExternalScripts++;
-          if (!$(el).attr("integrity")) {
-            externalScriptsNoSri++;
-          }
-        }
-      });
-      if (externalScriptsNoSri > 0) {
+      if (externalNoSri > 0) {
         sslScore -= 0.5;
         addTest(tests, {
           id: "sri-missing", name: "Subresource Integrity (SRI)", category: "ssl",
           status: "warning", severity: "warning",
-          value: `${externalScriptsNoSri}/${totalExternalScripts} ressource(s) externe(s) sans attribut integrity`,
-          recommendation: "Ajoutez l'attribut integrity (SRI) à toutes les ressources externes pour empêcher leur modification.",
+          value: `${externalNoSri}/${totalExternal} script(s)/style(s) tiers sans attribut integrity`,
+          recommendation: "Ajoutez l'attribut integrity (SRI) aux scripts et styles chargés depuis des domaines tiers à version fixe.",
           deduction: 0.5,
         });
-      } else if (totalExternalScripts > 0) {
+      } else if (totalExternal > 0) {
         addTest(tests, {
           id: "sri-ok", name: "Subresource Integrity (SRI)", category: "ssl",
-          status: "pass", severity: "info", value: `${totalExternalScripts} ressource(s) externe(s) protégée(s) par SRI`,
+          status: "pass", severity: "info", value: `${totalExternal} ressource(s) tierce(s) protégée(s) par SRI`,
           deduction: 0,
         });
       }
@@ -549,27 +593,20 @@ export async function scanSecurity(targetUrl: string): Promise<SecurityScanResul
     // CATEGORY 3: Information Leaks (20+ tests)
     // ═══════════════════════════════════════════
 
-    // 3.1 Server header
+    // 3.1 Server header — seul un numéro de version aide réellement un attaquant.
     const server = headers.get("server");
-    if (server) {
-      // Check for detailed version info
-      const hasVersion = /\d+\.\d+/.test(server);
-      const deduction = hasVersion ? 0.5 : 0.3;
-      infoLeakScore -= deduction;
+    if (server && /\d+\.\d+/.test(server)) {
+      infoLeakScore -= 0.5;
       addTest(tests, {
-        id: "server-exposed", name: "Header Server exposé", category: "info_leak",
-        status: hasVersion ? "fail" : "warning",
-        severity: hasVersion ? "warning" : "info",
-        value: server,
-        recommendation: hasVersion
-          ? "Masquez le numéro de version dans le header Server. Idéalement, supprimez-le complètement."
-          : "Masquez le header Server pour ne pas révéler votre technologie.",
-        deduction,
+        id: "server-exposed", name: "Header Server avec version", category: "info_leak",
+        status: "warning", severity: "warning", value: server,
+        recommendation: "Masquez le numéro de version dans le header Server (ex. server_tokens off; ServerTokens Prod).",
+        deduction: 0.5,
       });
     } else {
       addTest(tests, {
         id: "server-hidden", name: "Header Server", category: "info_leak",
-        status: "pass", severity: "info", value: "Non exposé",
+        status: "pass", severity: "info", value: server ? `${server} (sans version)` : "Non exposé",
         deduction: 0,
       });
     }
@@ -601,6 +638,24 @@ export async function scanSecurity(targetUrl: string): Promise<SecurityScanResul
         status: "warning", severity: "warning", value: aspnetVersion,
         recommendation: "Supprimez les headers X-AspNet-Version et X-AspNetMvc-Version.",
         deduction: 0.3,
+      });
+    }
+
+    // 3.3b En-têtes de debug / framework laissés en production
+    const debugHeaders = ["x-debug-token", "x-debug-token-link", "x-runtime", "x-generator", "x-drupal-cache", "x-backend-server", "x-sourcemap", "sourcemap"]
+      .filter((h) => headers.has(h));
+    if (debugHeaders.length > 0) {
+      const critical = debugHeaders.some((h) => h.startsWith("x-debug-token"));
+      const ded = critical ? 1 : 0.2;
+      infoLeakScore -= ded;
+      addTest(tests, {
+        id: "debug-headers", name: "En-têtes de debug / framework exposés", category: "info_leak",
+        status: critical ? "fail" : "warning", severity: critical ? "critical" : "info",
+        value: debugHeaders.map((h) => `${h}: ${(headers.get(h) || "").slice(0, 60)}`).join(", "),
+        recommendation: critical
+          ? "Le profiler de debug (Symfony) est actif en production : désactivez-le immédiatement (APP_ENV=prod)."
+          : "Supprimez les en-têtes révélant le framework, le backend ou les source maps.",
+        deduction: ded,
       });
     }
 
@@ -682,7 +737,7 @@ export async function scanSecurity(targetUrl: string): Promise<SecurityScanResul
       });
     }
 
-    // 3.9 robots.txt sensitive paths
+    // 3.9 robots.txt sensitive paths (seules les lignes Disallow révèlent des chemins)
     const robotsRes = await fetchWithTimeout(
       new URL("/robots.txt", baseUrl).href,
       { headers: { "User-Agent": "AIFriendly/1.0 (SecurityScan)" } },
@@ -690,15 +745,19 @@ export async function scanSecurity(targetUrl: string): Promise<SecurityScanResul
     );
     if (robotsRes && robotsRes.status === 200) {
       const robotsTxt = await robotsRes.text();
-      const sensitivePaths = ["/admin", "/api/internal", "/backup", "/phpmyadmin", "/cpanel", "/wp-admin", "/private", "/secret", "/database", "/config"];
-      const exposed = sensitivePaths.filter(p => robotsTxt.toLowerCase().includes(p));
+      const disallowed = robotsTxt
+        .split(/\r?\n/)
+        .map((l) => l.match(/^\s*disallow\s*:\s*(\S+)/i)?.[1]?.toLowerCase())
+        .filter((p): p is string => !!p);
+      const sensitiveRe = /^\/(admin|administrator|api\/internal|backup|backups|phpmyadmin|cpanel|private|secret|database|db|config|internal|staging|dev|debug)(\/|$|\*)/;
+      const exposed = [...new Set(disallowed.filter((p) => sensitiveRe.test(p)))];
       if (exposed.length > 0) {
-        infoLeakScore -= 0.5;
+        infoLeakScore -= 0.2;
         addTest(tests, {
-          id: "robots-sensitive", name: "robots.txt expose des chemins sensibles", category: "info_leak",
-          status: "warning", severity: "warning", value: exposed.join(", "),
-          recommendation: "Évitez de lister des chemins sensibles dans robots.txt — cela les révèle aux attaquants.",
-          deduction: 0.5,
+          id: "robots-sensitive", name: "robots.txt révèle des chemins sensibles", category: "info_leak",
+          status: "warning", severity: "info", value: exposed.slice(0, 8).join(", "),
+          recommendation: "robots.txt est public : ne l'utilisez pas pour « cacher » des chemins sensibles, protégez-les par authentification.",
+          deduction: 0.2,
         });
       }
     }
@@ -709,8 +768,11 @@ export async function scanSecurity(targetUrl: string): Promise<SecurityScanResul
     let match;
     while ((match = commentRegex.exec(html)) !== null) {
       const comment = match[1].toLowerCase();
-      const sensitiveKeywords = ["password", "pwd", "secret", "api_key", "apikey", "token", "credentials", "private_key", "access_key", "mysql", "database"];
-      if (sensitiveKeywords.some(kw => comment.includes(kw))) {
+      // Un mot-clé seul (« token », « database ») est fréquent dans des commentaires anodins :
+      // on exige une affectation de valeur (password=…, api_key: …) ou une chaîne de connexion.
+      const assigned = /\b(password|passwd|pwd|secret|api[_-]?key|apikey|access[_-]?key|private[_-]?key|auth[_-]?token|client[_-]?secret)\b\s*[:=]\s*["']?[^\s"'<>]{4,}/i;
+      const connectionString = /\b(mysql|postgres(ql)?|mongodb(\+srv)?|redis|amqp):\/\/[^\s:@]+:[^\s@]+@/i;
+      if (assigned.test(comment) || connectionString.test(comment)) {
         htmlComments.push(match[1].trim().slice(0, 100));
       }
     }
@@ -726,8 +788,8 @@ export async function scanSecurity(targetUrl: string): Promise<SecurityScanResul
     }
 
     // 3.11 Meta generator tag (version disclosure)
-    const generator = $('meta[name="generator"]').attr("content");
-    if (generator) {
+    const generator = $('meta[name="generator" i]').attr("content");
+    if (generator && /\d+\.\d+/.test(generator)) {
       infoLeakScore -= 0.3;
       addTest(tests, {
         id: "meta-generator", name: "Meta generator (version exposée)", category: "info_leak",
@@ -763,33 +825,24 @@ export async function scanSecurity(targetUrl: string): Promise<SecurityScanResul
       });
     }
 
-    // 3.13 Source maps detection
-    let hasSourceMaps = false;
-    $("script[src]").each((_, el) => {
-      const src = $(el).attr("src") || "";
-      if (src && !hasSourceMaps) {
-        const fullSrc = src.startsWith("http") ? src : new URL(src, baseUrl).href;
-        // Check for sourceMappingURL in the page source
-        if (html.includes("sourceMappingURL")) {
-          hasSourceMaps = true;
-        }
-      }
-    });
-    if (hasSourceMaps || html.includes("sourceMappingURL")) {
-      infoLeakScore -= 0.5;
+    // 3.13 Source maps référencées dans le HTML (scripts inline) ou annoncées par en-tête
+    if (/\/[/*]#\s*sourceMappingURL=/.test(html) || headers.has("sourcemap") || headers.has("x-sourcemap")) {
+      infoLeakScore -= 0.3;
       addTest(tests, {
         id: "source-maps", name: "Source maps exposées", category: "info_leak",
-        status: "warning", severity: "warning",
-        value: "Des references sourceMappingURL ont été détectées",
-        recommendation: "Supprimez les source maps en production pour ne pas exposer le code source original.",
-        deduction: 0.5,
+        status: "warning", severity: "info",
+        value: "Des références sourceMappingURL ont été détectées",
+        recommendation: "Ne publiez pas les source maps en production (ou restreignez leur accès) pour ne pas exposer le code source original.",
+        deduction: 0.3,
       });
     }
 
     // 3.14 Email exposure in HTML
     const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
     const emails = html.match(emailRegex) || [];
-    const uniqueEmails = [...new Set(emails)].filter(e => !e.includes("example.com") && !e.includes("schema.org"));
+    const uniqueEmails = [...new Set(emails.map((e) => e.toLowerCase()))].filter(
+      (e) => !/example\.(com|org)|schema\.org|sentry|wixpress/.test(e) && !/\.(png|jpe?g|gif|svg|webp|avif)$/.test(e)
+    );
     if (uniqueEmails.length > 3) {
       infoLeakScore -= 0.3;
       addTest(tests, {
@@ -801,26 +854,40 @@ export async function scanSecurity(targetUrl: string): Promise<SecurityScanResul
       });
     }
 
-    // 3.15 security.txt check
-    const securityTxtRes = await fetchWithTimeout(
-      new URL("/.well-known/security.txt", baseUrl).href,
-      { headers: { "User-Agent": "AIFriendly/1.0 (SecurityScan)" } },
-      5000
-    );
-    if (!securityTxtRes || securityTxtRes.status !== 200) {
+    // 3.15 security.txt (RFC 9116) — le contenu doit contenir un champ Contact (sinon soft 404)
+    let securityTxt: string | null = null;
+    for (const path of ["/.well-known/security.txt", "/security.txt"]) {
+      const r = await fetchWithTimeout(new URL(path, baseUrl).href, { headers: { "User-Agent": "AIFriendly/1.0 (SecurityScan)" } }, 5000);
+      if (r && r.status === 200) {
+        const body = (await r.text()).slice(0, 32 * 1024);
+        if (/^\s*Contact\s*:/im.test(body)) { securityTxt = body; break; }
+      }
+    }
+    if (!securityTxt) {
       addTest(tests, {
         id: "security-txt-missing", name: "security.txt", category: "info_leak",
         status: "warning", severity: "info",
-        value: "Absent — pas de fichier /.well-known/security.txt",
-        recommendation: "Créez un fichier security.txt (RFC 9116) pour indiquer comment signaler les vulnérabilités.",
+        value: "Absent — pas de fichier /.well-known/security.txt valide",
+        recommendation: "Créez un fichier /.well-known/security.txt (RFC 9116) avec Contact et Expires pour indiquer comment signaler les vulnérabilités.",
         deduction: 0,
       });
     } else {
-      addTest(tests, {
-        id: "security-txt-ok", name: "security.txt", category: "info_leak",
-        status: "pass", severity: "info", value: "Présent",
-        deduction: 0,
-      });
+      const expires = securityTxt.match(/^\s*Expires\s*:\s*(.+)$/im)?.[1]?.trim();
+      const expiresAt = expires ? Date.parse(expires) : NaN;
+      if (!Number.isNaN(expiresAt) && expiresAt < Date.now()) {
+        addTest(tests, {
+          id: "security-txt-expired", name: "security.txt", category: "info_leak",
+          status: "warning", severity: "info", value: `Expiré depuis le ${expires}`,
+          recommendation: "Mettez à jour le champ Expires de security.txt (RFC 9116).",
+          deduction: 0,
+        });
+      } else {
+        addTest(tests, {
+          id: "security-txt-ok", name: "security.txt", category: "info_leak",
+          status: "pass", severity: "info", value: expires ? `Présent (expire le ${expires})` : "Présent",
+          deduction: 0,
+        });
+      }
     }
 
     // 3.16 Server status/info pages (Apache)
@@ -840,128 +907,125 @@ export async function scanSecurity(targetUrl: string): Promise<SecurityScanResul
     // CATEGORY 4: Cookies (7 tests)
     // ═══════════════════════════════════════════
 
-    const setCookies = res.headers.getSetCookie?.() || [];
-    if (setCookies.length > 0) {
-      let hasInsecureCookie = false;
-      let hasNoHttpOnly = false;
-      let hasNoSameSite = false;
-      let hasWeakSameSite = false;
-      let hasNoPrefixes = false;
-      let hasBroadDomain = false;
-      let sessionCookieNames: string[] = [];
-
-      for (const cookie of setCookies) {
-        const lower = cookie.toLowerCase();
-        const cookieName = cookie.split("=")[0].trim();
-
-        if (!lower.includes("secure")) hasInsecureCookie = true;
-        if (!lower.includes("httponly")) hasNoHttpOnly = true;
-        if (!lower.includes("samesite")) {
-          hasNoSameSite = true;
-        } else if (lower.includes("samesite=none")) {
-          hasWeakSameSite = true;
-        }
-
-        // Check for __Secure- or __Host- prefixes on session-like cookies
-        const isSessionCookie = ["session", "sess", "sid", "token", "auth", "jwt"].some(s => cookieName.toLowerCase().includes(s));
-        if (isSessionCookie) {
-          sessionCookieNames.push(cookieName);
-          if (!cookieName.startsWith("__Secure-") && !cookieName.startsWith("__Host-")) {
-            hasNoPrefixes = true;
-          }
-        }
-
-        // Check for overly broad domain
-        const domainMatch = cookie.match(/domain=([^;]+)/i);
-        if (domainMatch) {
-          const domain = domainMatch[1].trim();
-          // If domain starts with . and has only 2 parts, it's overly broad
-          if (domain.startsWith(".") && domain.split(".").filter(Boolean).length <= 2) {
-            hasBroadDomain = true;
-          }
-        }
+    // Analyse des attributs réels (pas une recherche de sous-chaîne : la valeur
+    // d'un cookie peut contenir « secure »).
+    const cookies = setCookies.map((raw) => {
+      const [pair, ...attrParts] = raw.split(";");
+      const name = pair.split("=")[0].trim();
+      const attrs = new Map<string, string>();
+      for (const part of attrParts) {
+        const [k, ...v] = part.split("=");
+        attrs.set(k.trim().toLowerCase(), v.join("=").trim());
       }
+      return {
+        name,
+        secure: attrs.has("secure"),
+        httpOnly: attrs.has("httponly"),
+        sameSite: (attrs.get("samesite") || "").toLowerCase(),
+        domain: (attrs.get("domain") || "").replace(/^\./, "").toLowerCase(),
+        isSession: SESSION_COOKIE_RE.test(name),
+      };
+    });
 
-      // 4.1 Secure flag
-      if (hasInsecureCookie) {
-        cookiesScore -= 1;
+    if (cookies.length > 0) {
+      const sessionCookies = cookies.filter((c) => c.isSession);
+      const list = (cs: typeof cookies) => cs.map((c) => c.name).slice(0, 6).join(", ");
+
+      // 4.1 Secure — sur un site HTTPS tous les cookies devraient l'avoir ; critique pour les sessions.
+      const noSecure = cookies.filter((c) => !c.secure);
+      if (isHttps && noSecure.length > 0) {
+        const critical = noSecure.some((c) => c.isSession);
+        const ded = critical ? 1 : 0.3;
+        cookiesScore -= ded;
         addTest(tests, {
           id: "cookie-no-secure", name: "Cookies sans flag Secure", category: "cookies",
-          status: "fail", severity: "critical", value: "Des cookies sont envoyés sans le flag Secure",
-          recommendation: "Ajoutez le flag Secure à tous les cookies pour empêcher leur envoi sur HTTP.",
+          status: critical ? "fail" : "warning", severity: critical ? "critical" : "warning",
+          value: `Sans Secure: ${list(noSecure)}`,
+          recommendation: "Ajoutez le flag Secure aux cookies pour empêcher leur envoi en clair sur HTTP.",
+          deduction: ded,
+        });
+      }
+
+      // 4.2 HttpOnly — requis pour les cookies de session ; les cookies lus par le JS
+      // (consentement, analytics, jeton CSRF « double submit ») n'en ont légitimement pas.
+      const sessionNoHttpOnly = sessionCookies.filter((c) => !c.httpOnly);
+      if (sessionNoHttpOnly.length > 0) {
+        cookiesScore -= 1;
+        addTest(tests, {
+          id: "cookie-no-httponly", name: "Cookies de session sans HttpOnly", category: "cookies",
+          status: "fail", severity: "critical", value: `Lisibles par JavaScript: ${list(sessionNoHttpOnly)}`,
+          recommendation: "Ajoutez HttpOnly aux cookies de session pour qu'une faille XSS ne permette pas de les voler.",
           deduction: 1,
         });
       }
 
-      // 4.2 HttpOnly flag
-      if (hasNoHttpOnly) {
-        cookiesScore -= 0.5;
+      // 4.3 SameSite absent — les navigateurs appliquent Lax par défaut (sauf Safari) : explicite recommandé.
+      const noSameSite = cookies.filter((c) => !c.sameSite);
+      if (noSameSite.length > 0) {
+        const ded = noSameSite.some((c) => c.isSession) ? 0.3 : 0.1;
+        cookiesScore -= ded;
         addTest(tests, {
-          id: "cookie-no-httponly", name: "Cookies sans flag HttpOnly", category: "cookies",
-          status: "warning", severity: "warning", value: "Des cookies sont accessibles via JavaScript",
-          recommendation: "Ajoutez le flag HttpOnly aux cookies sensibles pour empêcher l'accès via document.cookie.",
-          deduction: 0.5,
+          id: "cookie-no-samesite", name: "Cookies sans attribut SameSite", category: "cookies",
+          status: "warning", severity: ded > 0.1 ? "warning" : "info", value: list(noSameSite),
+          recommendation: "Déclarez explicitement SameSite=Lax (ou Strict) pour vous protéger du CSRF sur tous les navigateurs.",
+          deduction: ded,
         });
       }
 
-      // 4.3 SameSite flag
-      if (hasNoSameSite) {
-        cookiesScore -= 0.5;
-        addTest(tests, {
-          id: "cookie-no-samesite", name: "Cookies sans flag SameSite", category: "cookies",
-          status: "warning", severity: "warning", value: "Des cookies n'ont pas le flag SameSite",
-          recommendation: "Ajoutez SameSite=Strict ou SameSite=Lax à vos cookies pour prévenir le CSRF.",
-          deduction: 0.5,
-        });
-      }
-
-      // 4.4 SameSite=None (weak)
-      if (hasWeakSameSite) {
-        cookiesScore -= 0.3;
+      // 4.4 SameSite=None — rejeté sans Secure ; à éviter pour les sessions.
+      const sameSiteNone = cookies.filter((c) => c.sameSite === "none");
+      if (sameSiteNone.length > 0) {
+        const insecureNone = sameSiteNone.filter((c) => !c.secure);
+        const ded = insecureNone.length > 0 || sameSiteNone.some((c) => c.isSession) ? 0.5 : 0.1;
+        cookiesScore -= ded;
         addTest(tests, {
           id: "cookie-samesite-none", name: "Cookies avec SameSite=None", category: "cookies",
-          status: "warning", severity: "warning",
-          value: "Des cookies utilisent SameSite=None — ils sont envoyés dans toutes les requêtes cross-site",
-          recommendation: "Utilisez SameSite=Strict ou Lax sauf si le cookie doit absolument être cross-site.",
-          deduction: 0.3,
+          status: "warning", severity: ded > 0.1 ? "warning" : "info",
+          value: insecureNone.length > 0
+            ? `SameSite=None sans Secure (rejetés par les navigateurs): ${list(insecureNone)}`
+            : `Envoyés dans les requêtes cross-site: ${list(sameSiteNone)}`,
+          recommendation: "Réservez SameSite=None (toujours avec Secure) aux cookies devant réellement être cross-site.",
+          deduction: ded,
         });
       }
 
-      // 4.5 Cookie prefixes
-      if (hasNoPrefixes && sessionCookieNames.length > 0) {
-        cookiesScore -= 0.2;
+      // 4.5 Préfixes __Host- / __Secure- pour les cookies de session (défense en profondeur)
+      const noPrefix = sessionCookies.filter((c) => !c.name.startsWith("__Host-") && !c.name.startsWith("__Secure-"));
+      if (isHttps && noPrefix.length > 0) {
         addTest(tests, {
           id: "cookie-no-prefix", name: "Cookies de session sans préfixe sécurisé", category: "cookies",
-          status: "warning", severity: "info",
-          value: `Cookies de session sans préfixe __Secure- ou __Host-: ${sessionCookieNames.join(", ")}`,
-          recommendation: "Utilisez les préfixes __Secure- ou __Host- pour les cookies sensibles (protection contre l'override).",
-          deduction: 0.2,
+          status: "warning", severity: "info", value: list(noPrefix),
+          recommendation: "Utilisez le préfixe __Host- pour les cookies de session (impose Secure, Path=/ et l'absence de Domain).",
+          deduction: 0,
         });
       }
 
-      // 4.6 Broad domain
-      if (hasBroadDomain) {
-        cookiesScore -= 0.5;
+      // 4.6 Domain parent du site : le cookie est partagé avec tous les sous-domaines du parent.
+      const host = siteHost.toLowerCase();
+      const broad = cookies.filter((c) => c.domain && c.domain !== host && host.endsWith(`.${c.domain}`) && (c.isSession || c.domain.split(".").length <= 2));
+      if (broad.length > 0) {
+        const ded = broad.some((c) => c.isSession) ? 0.5 : 0.2;
+        cookiesScore -= ded;
         addTest(tests, {
-          id: "cookie-broad-domain", name: "Cookie avec domaine trop large", category: "cookies",
-          status: "warning", severity: "warning",
-          value: "Un cookie est défini sur un domaine parent trop large",
-          recommendation: "Restreignez le domaine des cookies au sous-domaine spécifique.",
-          deduction: 0.5,
+          id: "cookie-broad-domain", name: "Cookie partagé avec le domaine parent", category: "cookies",
+          status: "warning", severity: ded > 0.2 ? "warning" : "info",
+          value: broad.map((c) => `${c.name} (Domain=${c.domain})`).slice(0, 4).join(", "),
+          recommendation: "N'indiquez pas d'attribut Domain (cookie limité à l'hôte) sauf si le partage entre sous-domaines est nécessaire.",
+          deduction: ded,
         });
       }
 
-      if (!hasInsecureCookie && !hasNoHttpOnly && !hasNoSameSite && !hasWeakSameSite) {
+      if (!tests.some((t) => t.category === "cookies" && t.status !== "pass" && t.deduction > 0)) {
         addTest(tests, {
           id: "cookies-ok", name: "Cookies", category: "cookies",
-          status: "pass", severity: "info", value: `${setCookies.length} cookie(s) correctement configuré(s)`,
+          status: "pass", severity: "info", value: `${cookies.length} cookie(s) correctement configuré(s)`,
           deduction: 0,
         });
       }
     } else {
       addTest(tests, {
         id: "no-cookies", name: "Cookies", category: "cookies",
-        status: "pass", severity: "info", value: "Aucun cookie défini",
+        status: "pass", severity: "info", value: "Aucun cookie défini sur la page d'accueil",
         deduction: 0,
       });
     }
@@ -970,51 +1034,40 @@ export async function scanSecurity(targetUrl: string): Promise<SecurityScanResul
     // CATEGORY 5: Injection / XSS (15+ tests)
     // ═══════════════════════════════════════════
 
-    // 5.1 Check forms without CSRF tokens
-    const forms = $("form");
-    if (forms.length > 0) {
-      let formsWithoutCsrf = 0;
-      let formsWithAutocomplete = 0;
-      forms.each((_, form) => {
-        const $form = $(form);
-        const hasCsrf = $form.find('input[name*="csrf"], input[name*="token"], input[name*="_token"], input[name*="authenticity"], input[name*="nonce"]').length > 0;
-        if (!hasCsrf && $form.attr("method")?.toLowerCase() === "post") {
-          formsWithoutCsrf++;
-        }
-        // Check for autocomplete on sensitive forms
-        if ($form.find('input[type="password"]').length > 0 && $form.attr("autocomplete") !== "off") {
-          formsWithAutocomplete++;
-        }
+    // 5.1 Formulaires POST (vers le site lui-même) sans jeton anti-CSRF.
+    // Heuristique : un cookie de session SameSite=Lax/Strict atténue fortement le risque.
+    let postForms = 0;
+    let formsWithoutCsrf = 0;
+    $("form").each((_, form) => {
+      const $form = $(form);
+      if (($form.attr("method") || "get").toLowerCase() !== "post") return;
+      if (!isSameSite(hostOf($form.attr("action") || "", finalUrl), siteHost)) return; // newsletter, paiement… : hors périmètre
+      postForms++;
+      const hasCsrf = $form.find('input[type="hidden"]').toArray().some((el) =>
+        /csrf|xsrf|token|authenticity|nonce|verification/i.test($(el).attr("name") || "")
+      );
+      if (!hasCsrf) formsWithoutCsrf++;
+    });
+    if (formsWithoutCsrf > 0) {
+      const sessionProtected = cookies.some((c) => c.isSession && (c.sameSite === "lax" || c.sameSite === "strict"));
+      const ded = sessionProtected ? 0.2 : 0.5;
+      injectionScore -= ded;
+      addTest(tests, {
+        id: "no-csrf", name: "Formulaires POST sans jeton CSRF", category: "injection",
+        status: "warning", severity: sessionProtected ? "info" : "warning",
+        value: `${formsWithoutCsrf}/${postForms} formulaire(s) POST sans champ caché anti-CSRF${sessionProtected ? " (atténué par SameSite)" : ""}`,
+        recommendation: "Ajoutez un jeton CSRF aux formulaires POST qui modifient des données, en plus de cookies SameSite=Lax/Strict.",
+        deduction: ded,
       });
-      if (formsWithoutCsrf > 0) {
-        injectionScore -= 1;
-        addTest(tests, {
-          id: "no-csrf", name: "Formulaires sans CSRF token", category: "injection",
-          status: "fail", severity: "critical",
-          value: `${formsWithoutCsrf} formulaire(s) POST sans token CSRF détecté(s)`,
-          recommendation: "Ajoutez un token CSRF à tous les formulaires POST.",
-          deduction: 1,
-        });
-      } else {
-        addTest(tests, {
-          id: "csrf-ok", name: "Protection CSRF", category: "injection",
-          status: "pass", severity: "info", value: "Tokens CSRF détectés dans les formulaires",
-          deduction: 0,
-        });
-      }
-
-      // 5.1b Autocomplete on password fields
-      if (formsWithAutocomplete > 0) {
-        injectionScore -= 0.2;
-        addTest(tests, {
-          id: "autocomplete-password", name: "Autocomplete sur champs sensibles", category: "injection",
-          status: "warning", severity: "info",
-          value: `${formsWithAutocomplete} formulaire(s) avec autocomplete activé sur des champs de mot de passe`,
-          recommendation: "Ajoutez autocomplete='off' aux formulaires contenant des mots de passe.",
-          deduction: 0.2,
-        });
-      }
+    } else if (postForms > 0) {
+      addTest(tests, {
+        id: "csrf-ok", name: "Protection CSRF", category: "injection",
+        status: "pass", severity: "info", value: "Jetons CSRF détectés dans les formulaires POST",
+        deduction: 0,
+      });
     }
+    // (L'ancien test « autocomplete=off sur les mots de passe » est supprimé : c'est un
+    // anti-pattern selon OWASP/NIST — il gêne les gestionnaires de mots de passe et est ignoré.)
 
     // 5.2 Reflected XSS check (canary)
     const xssTestUrl = new URL(targetUrl);
@@ -1086,8 +1139,8 @@ export async function scanSecurity(targetUrl: string): Promise<SecurityScanResul
         10000
       );
       if (redirectRes && redirectRes.status >= 300 && redirectRes.status < 400) {
-        const loc = redirectRes.headers.get("location") || "";
-        if (loc.includes("evil.com")) {
+        const locHost = hostOf(redirectRes.headers.get("location") || "", redirectTestUrl.href);
+        if (locHost === "evil.com" || locHost?.endsWith(".evil.com")) {
           injectionScore -= 1;
           addTest(tests, {
             id: "open-redirect", name: "Open redirect détecté", category: "injection",
@@ -1105,7 +1158,7 @@ export async function scanSecurity(targetUrl: string): Promise<SecurityScanResul
     const sqlPayloads = ["'", "1' OR '1'='1", "1; DROP TABLE", "' UNION SELECT 1--"];
     let sqlInjectionFound = false;
     const sqlErrorPatterns = [
-      "SQL syntax", "mysql_fetch", "pg_query", "ORA-", "SQLite3::",
+      "SQL syntax", "mysql_fetch", "pg_query", "ORA-0", "ORA-1", "SQLite3::",
       "Unclosed quotation mark", "SQLSTATE", "syntax error at or near",
       "Microsoft OLE DB", "ODBC SQL Server Driver", "JET Database Engine",
       "valid MySQL result", "PostgreSQL query failed", "unterminated quoted string",
@@ -1122,7 +1175,8 @@ export async function scanSecurity(targetUrl: string): Promise<SecurityScanResul
       );
       if (sqlRes) {
         const sqlBody = await sqlRes.text();
-        if (sqlErrorPatterns.some(pattern => sqlBody.includes(pattern))) {
+        // La signature doit être absente de la page normale (ex. un blog qui parle de SQL).
+        if (sqlErrorPatterns.some(pattern => sqlBody.includes(pattern) && !html.includes(pattern))) {
           injectionScore -= 2;
           addTest(tests, {
             id: "sql-injection", name: "Injection SQL potentielle", category: "injection",
@@ -1151,7 +1205,9 @@ export async function scanSecurity(targetUrl: string): Promise<SecurityScanResul
       );
       if (ptRes) {
         const ptBody = await ptRes.text();
-        if (ptBody.includes("root:x:") || ptBody.includes("[extensions]") || ptBody.includes("/bin/bash")) {
+        // Contenu réel de /etc/passwd ou win.ini, absent de la page normale.
+        const leaked = /root:[x*]?:0:0:/.test(ptBody) || /^\[(extensions|fonts|mci extensions)\]/im.test(ptBody);
+        if (leaked && !/root:[x*]?:0:0:/.test(html)) {
           injectionScore -= 2;
           addTest(tests, {
             id: "path-traversal", name: "Path traversal détecté", category: "injection",
@@ -1181,13 +1237,14 @@ export async function scanSecurity(targetUrl: string): Promise<SecurityScanResul
       const acac = corsRes.headers.get("access-control-allow-credentials");
 
       if (acao === "*") {
-        injectionScore -= 0.5;
+        // Sans credentials, « * » ne permet de lire que du contenu déjà public : faible impact.
+        injectionScore -= 0.1;
         addTest(tests, {
           id: "cors-wildcard", name: "CORS: wildcard Access-Control-Allow-Origin", category: "injection",
-          status: "warning", severity: "warning",
-          value: "Access-Control-Allow-Origin: * — toutes les origines sont autorisées",
-          recommendation: "Restreignez CORS aux domaines de confiance au lieu d'utiliser *.",
-          deduction: 0.5,
+          status: "warning", severity: "info",
+          value: "Access-Control-Allow-Origin: * — lisible par toute origine (sans cookies)",
+          recommendation: "Si la page ou l'API renvoie des données non publiques, restreignez CORS aux domaines de confiance au lieu de *.",
+          deduction: 0.1,
         });
       } else if (acao && acao.includes("evil-attacker.com")) {
         injectionScore -= 1.5;
@@ -1261,32 +1318,30 @@ export async function scanSecurity(targetUrl: string): Promise<SecurityScanResul
       }
     }
 
-    // 5.10 DOM-based XSS indicators
-    const dangerousDomPatterns = [
-      { pattern: "document.write(", name: "document.write()" },
-      { pattern: ".innerHTML =", name: "innerHTML assignment" },
-      { pattern: ".innerHTML=", name: "innerHTML assignment" },
-      { pattern: ".outerHTML =", name: "outerHTML assignment" },
-      { pattern: "eval(", name: "eval()" },
-      { pattern: "setTimeout(\"", name: "setTimeout with string" },
-      { pattern: "setTimeout('", name: "setTimeout with string" },
-      { pattern: "setInterval(\"", name: "setInterval with string" },
-      { pattern: "setInterval('", name: "setInterval with string" },
+    // 5.10 DOM-based XSS : un même script inline lit une source contrôlable par l'URL
+    // et utilise un sink dangereux (la simple présence d'innerHTML n'est pas une faille).
+    const domSources = /location\.(hash|search|href)|document\.(URL|documentURI|referrer)|window\.name|URLSearchParams/;
+    const domSinks: [RegExp, string][] = [
+      [/document\.write(ln)?\s*\(/, "document.write()"],
+      [/\.(inner|outer)HTML\s*=(?!=)/, "innerHTML/outerHTML"],
+      [/insertAdjacentHTML\s*\(/, "insertAdjacentHTML()"],
+      [/\beval\s*\(/, "eval()"],
+      [/set(Timeout|Interval)\s*\(\s*["'`]/, "setTimeout/setInterval avec chaîne"],
     ];
-    const foundDomPatterns: string[] = [];
-    for (const { pattern, name } of dangerousDomPatterns) {
-      if (html.includes(pattern)) {
-        foundDomPatterns.push(name);
-      }
-    }
-    if (foundDomPatterns.length > 0) {
-      injectionScore -= 0.5;
+    const foundDomPatterns = new Set<string>();
+    $("script:not([src])").each((_, el) => {
+      const code = $(el).text();
+      if (!domSources.test(code)) return;
+      for (const [re, name] of domSinks) if (re.test(code)) foundDomPatterns.add(name);
+    });
+    if (foundDomPatterns.size > 0) {
+      injectionScore -= 0.3;
       addTest(tests, {
-        id: "dom-xss-patterns", name: "Patterns DOM XSS détectés", category: "injection",
+        id: "dom-xss-patterns", name: "Indices de DOM XSS (source URL → sink)", category: "injection",
         status: "warning", severity: "warning",
-        value: `Patterns dangereux trouvés: ${foundDomPatterns.join(", ")}`,
-        recommendation: "Évitez document.write(), innerHTML et eval(). Utilisez textContent et les API DOM sécurisées.",
-        deduction: 0.5,
+        value: `Script inline lisant l'URL et utilisant: ${[...foundDomPatterns].join(", ")}`,
+        recommendation: "N'injectez jamais location/referrer dans innerHTML, document.write ou eval : utilisez textContent ou une API de sanitisation (DOMPurify, Trusted Types).",
+        deduction: 0.3,
       });
     }
 
@@ -1321,37 +1376,37 @@ export async function scanSecurity(targetUrl: string): Promise<SecurityScanResul
       }
     });
     if (inlineEventHandlers > 5) {
-      injectionScore -= 0.3;
+      injectionScore -= 0.1;
       addTest(tests, {
         id: "inline-events", name: "Gestionnaires d'événements inline", category: "injection",
         status: "warning", severity: "info",
         value: `${inlineEventHandlers} attributs d'événements inline (onclick, onload, etc.) détectés`,
         recommendation: "Utilisez addEventListener() au lieu des attributs d'événements inline pour une meilleure séparation et compatibilité CSP.",
-        deduction: 0.3,
+        deduction: 0.1,
       });
     }
 
-    // 5.13 Forms with action to external domain
-    let externalFormActions = 0;
+    // 5.13 Formulaires de connexion envoyés vers un domaine tiers (les formulaires de
+    // newsletter/paiement vers un prestataire sont normaux et ne sont pas signalés).
+    let externalCredentialForms = 0;
     $("form[action]").each((_, form) => {
-      const action = $(form).attr("action") || "";
-      if (action.startsWith("http") && !action.includes(new URL(targetUrl).hostname)) {
-        externalFormActions++;
-      }
+      const $form = $(form);
+      if ($form.find('input[type="password" i]').length === 0) return;
+      if (!isSameSite(hostOf($form.attr("action") || "", finalUrl), siteHost)) externalCredentialForms++;
     });
-    if (externalFormActions > 0) {
+    if (externalCredentialForms > 0) {
       injectionScore -= 0.5;
       addTest(tests, {
-        id: "external-form-action", name: "Formulaires avec action externe", category: "injection",
+        id: "external-form-action", name: "Mot de passe envoyé à un domaine tiers", category: "injection",
         status: "warning", severity: "warning",
-        value: `${externalFormActions} formulaire(s) envoient les données vers un domaine externe`,
-        recommendation: "Vérifiez que les formulaires envoyant des données à des domaines externes sont légitimes.",
+        value: `${externalCredentialForms} formulaire(s) avec mot de passe postent vers un autre domaine`,
+        recommendation: "Vérifiez que le domaine destinataire des identifiants est bien le vôtre ou votre fournisseur d'authentification.",
         deduction: 0.5,
       });
     }
 
     // 5.14 Password fields without autocomplete=off and in HTTP (non-HTTPS)
-    if (!targetUrl.startsWith("https://")) {
+    if (!isHttps) {
       const passwordFields = $('input[type="password"]').length;
       if (passwordFields > 0) {
         injectionScore -= 1;
@@ -1365,12 +1420,10 @@ export async function scanSecurity(targetUrl: string): Promise<SecurityScanResul
       }
     }
 
-    // 5.15 Clickjacking via iframe test (try to embed the site)
-    // Already covered by X-Frame-Options and CSP frame-ancestors above
-
     // 5.16 Check for Content-Type header on API-like responses
     const contentType = headers.get("content-type");
-    if (contentType && !contentType.includes("charset")) {
+    const hasMetaCharset = /<meta[^>]+charset\s*=/i.test(html.slice(0, 2048));
+    if (contentType && contentType.includes("html") && !contentType.includes("charset") && !hasMetaCharset) {
       injectionScore -= 0.1;
       addTest(tests, {
         id: "no-charset", name: "Charset non défini dans Content-Type", category: "injection",

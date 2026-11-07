@@ -18,6 +18,7 @@ COPY webapp/lib/node-security.ts ./lib/node-security.ts
 COPY webapp/lib/ssrf-guard.ts ./lib/ssrf-guard.ts
 COPY webapp/lib/path-probe.ts ./lib/path-probe.ts
 COPY webapp/lib/admin-panel-detection.ts ./lib/admin-panel-detection.ts
+COPY webapp/lib/security-scanner.ts ./lib/security-scanner.ts
 COPY worker/index.ts ./index.ts
 COPY worker/tsconfig.json ./tsconfig.json
 
