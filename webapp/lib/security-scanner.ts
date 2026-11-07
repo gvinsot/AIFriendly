@@ -7,6 +7,17 @@
 import * as cheerio from "cheerio";
 import { safeFetch } from "./ssrf-guard";
 import { detectAdminPanels } from "./admin-panel-detection";
+import {
+  API_DOC_PATHS,
+  BACKUP_FILES,
+  DIR_LISTING_PATHS,
+  NotFoundBaseline,
+  SENSITIVE_FILES,
+  SERVER_STATUS_PAGES,
+  detectExposedPaths,
+  isMethodReallyAccepted,
+  isTraceEcho,
+} from "./path-probe";
 
 const SECURITY_TIMEOUT_MS = 60000;
 
@@ -593,89 +604,39 @@ export async function scanSecurity(targetUrl: string): Promise<SecurityScanResul
       });
     }
 
-    // 3.4 Sensitive files check (expanded list)
-    const sensitiveFiles = [
-      { path: "/.env", name: ".env", severity: "critical" as const },
-      { path: "/.env.local", name: ".env.local", severity: "critical" as const },
-      { path: "/.env.production", name: ".env.production", severity: "critical" as const },
-      { path: "/.git/HEAD", name: ".git/", severity: "critical" as const },
-      { path: "/.git/config", name: ".git/config", severity: "critical" as const },
-      { path: "/.svn/entries", name: ".svn/", severity: "critical" as const },
-      { path: "/wp-config.php", name: "wp-config.php", severity: "critical" as const },
-      { path: "/wp-config.php.bak", name: "wp-config.php.bak", severity: "critical" as const },
-      { path: "/.htaccess", name: ".htaccess", severity: "warning" as const },
-      { path: "/.htpasswd", name: ".htpasswd", severity: "critical" as const },
-      { path: "/phpinfo.php", name: "phpinfo.php", severity: "critical" as const },
-      { path: "/.DS_Store", name: ".DS_Store", severity: "warning" as const },
-      { path: "/web.config", name: "web.config", severity: "warning" as const },
-      { path: "/composer.json", name: "composer.json", severity: "warning" as const },
-      { path: "/package.json", name: "package.json", severity: "warning" as const },
-      { path: "/Gemfile", name: "Gemfile", severity: "warning" as const },
-      { path: "/.npmrc", name: ".npmrc", severity: "critical" as const },
-      { path: "/backup.sql", name: "backup.sql", severity: "critical" as const },
-      { path: "/dump.sql", name: "dump.sql", severity: "critical" as const },
-      { path: "/database.sql", name: "database.sql", severity: "critical" as const },
-      { path: "/error_log", name: "error_log", severity: "warning" as const },
-      { path: "/debug.log", name: "debug.log", severity: "warning" as const },
-      { path: "/docker-compose.yml", name: "docker-compose.yml", severity: "warning" as const },
-      { path: "/Dockerfile", name: "Dockerfile", severity: "warning" as const },
-      { path: "/config.yml", name: "config.yml", severity: "warning" as const },
-      { path: "/credentials.json", name: "credentials.json", severity: "critical" as const },
-    ];
+    // Réponses du site aux chemins inexistants (détection des soft 404 / pages catch-all),
+    // partagées par tous les tests de chemins ci-dessous.
+    const notFoundBaseline = new NotFoundBaseline(baseUrl, fetchWithTimeout);
 
-    const sensitiveFileChecks = sensitiveFiles.map(async (file) => {
-      const fileRes = await fetchWithTimeout(
-        new URL(file.path, baseUrl).href,
-        { headers: { "User-Agent": "AIFriendly/1.0 (SecurityScan)" } },
-        5000
-      );
-      if (fileRes && fileRes.status === 200) {
-        const ct = fileRes.headers.get("content-type") || "";
-        // Only flag if it's not returning the main site's HTML (custom 404)
-        if (!ct.includes("text/html")) {
-          const ded = file.severity === "critical" ? 2 : 0.5;
-          infoLeakScore -= ded;
-          addTest(tests, {
-            id: `sensitive-${file.name}`, name: `Fichier sensible accessible: ${file.name}`, category: "info_leak",
-            status: "fail", severity: file.severity,
-            value: `${file.path} retourne HTTP 200 (${ct || "type inconnu"})`,
-            recommendation: `Bloquez l'accès à ${file.path} dans votre serveur web.`,
-            deduction: ded,
-          });
-        }
-      }
-    });
-    await Promise.allSettled(sensitiveFileChecks);
+    // 3.4 Sensitive files check — le contenu doit ressembler au vrai fichier
+    // (une page 404 servie en HTTP 200 n'est pas signalée).
+    const exposedFiles = await detectExposedPaths(baseUrl, fetchWithTimeout, SENSITIVE_FILES, notFoundBaseline);
+    for (const { spec: file, res } of exposedFiles) {
+      const ded = file.severity === "critical" ? 2 : 0.5;
+      infoLeakScore -= ded;
+      addTest(tests, {
+        id: `sensitive-${file.name}`, name: `Fichier sensible accessible: ${file.name}`, category: "info_leak",
+        status: "fail", severity: file.severity,
+        value: `${file.path} retourne HTTP 200 avec le contenu du fichier (${res.contentType || "type inconnu"})`,
+        recommendation: `Bloquez l'accès à ${file.path} dans votre serveur web.`,
+        deduction: ded,
+      });
+    }
 
     // 3.5 Backup file extensions
-    const backupPaths = [
-      "/index.php.bak", "/index.php.old", "/index.php~",
-      "/index.html.bak", "/index.html.old",
-      "/.backup", "/backup/", "/backups/",
-    ];
-    const backupChecks = backupPaths.map(async (path) => {
-      const backupRes = await fetchWithTimeout(
-        new URL(path, baseUrl).href,
-        { headers: { "User-Agent": "AIFriendly/1.0 (SecurityScan)" } },
-        5000
-      );
-      if (backupRes && backupRes.status === 200) {
-        const ct = backupRes.headers.get("content-type") || "";
-        if (!ct.includes("text/html")) {
-          infoLeakScore -= 1;
-          addTest(tests, {
-            id: `backup-${path.replace(/\//g, "-")}`, name: `Fichier de sauvegarde accessible`, category: "info_leak",
-            status: "fail", severity: "critical", value: `${path} retourne HTTP 200`,
-            recommendation: `Supprimez ou bloquez l'accès aux fichiers de sauvegarde (${path}).`,
-            deduction: 1,
-          });
-        }
-      }
-    });
-    await Promise.allSettled(backupChecks);
+    const exposedBackups = await detectExposedPaths(baseUrl, fetchWithTimeout, BACKUP_FILES, notFoundBaseline);
+    for (const { spec } of exposedBackups) {
+      infoLeakScore -= 1;
+      addTest(tests, {
+        id: `backup-${spec.path.replace(/\//g, "-")}`, name: `Fichier de sauvegarde accessible`, category: "info_leak",
+        status: "fail", severity: "critical", value: `${spec.path} retourne HTTP 200`,
+        recommendation: `Supprimez ou bloquez l'accès aux fichiers de sauvegarde (${spec.path}).`,
+        deduction: 1,
+      });
+    }
 
     // 3.6 Admin panels detection (ignore les pages catch-all de SPA, les blocages WAF et les 403)
-    const adminPanels = await detectAdminPanels(baseUrl, fetchWithTimeout);
+    const adminPanels = await detectAdminPanels(baseUrl, fetchWithTimeout, undefined, notFoundBaseline);
     for (const panel of adminPanels.findings) {
       infoLeakScore -= 0.3;
       addTest(tests, {
@@ -697,49 +658,28 @@ export async function scanSecurity(targetUrl: string): Promise<SecurityScanResul
     }
 
     // 3.7 API documentation exposed
-    const apiDocPaths = [
-      "/swagger", "/swagger-ui", "/swagger-ui.html", "/api-docs",
-      "/graphql", "/graphiql", "/__graphql", "/api/explorer",
-    ];
-    const apiDocChecks = apiDocPaths.map(async (path) => {
-      const apiRes = await fetchWithTimeout(
-        new URL(path, baseUrl).href,
-        { headers: { "User-Agent": "AIFriendly/1.0 (SecurityScan)" } },
-        5000
-      );
-      if (apiRes && apiRes.status === 200) {
-        infoLeakScore -= 0.5;
-        addTest(tests, {
-          id: `api-docs-${path.replace(/\//g, "-")}`, name: `Documentation API exposée: ${path}`, category: "info_leak",
-          status: "warning", severity: "warning", value: `${path} retourne HTTP 200`,
-          recommendation: `Protégez l'accès à la documentation API (${path}) par authentification.`,
-          deduction: 0.5,
-        });
-      }
-    });
-    await Promise.allSettled(apiDocChecks);
+    const exposedApiDocs = await detectExposedPaths(baseUrl, fetchWithTimeout, API_DOC_PATHS, notFoundBaseline);
+    for (const { spec } of exposedApiDocs) {
+      infoLeakScore -= 0.5;
+      addTest(tests, {
+        id: `api-docs-${spec.path.replace(/\//g, "-")}`, name: `Documentation API exposée: ${spec.path}`, category: "info_leak",
+        status: "warning", severity: "warning", value: `${spec.path} retourne HTTP 200`,
+        recommendation: `Protégez l'accès à la documentation API (${spec.path}) par authentification.`,
+        deduction: 0.5,
+      });
+    }
 
     // 3.8 Directory listing check (multiple directories)
-    const dirListPaths = ["/icons/", "/images/", "/uploads/", "/static/", "/assets/"];
-    for (const dirPath of dirListPaths) {
-      const dirRes = await fetchWithTimeout(
-        new URL(dirPath, baseUrl).href,
-        { headers: { "User-Agent": "AIFriendly/1.0 (SecurityScan)" } },
-        5000
-      );
-      if (dirRes && dirRes.status === 200) {
-        const dirBody = await dirRes.text();
-        if (dirBody.includes("Index of") || dirBody.includes("Directory listing") || dirBody.includes("[To Parent Directory]")) {
-          infoLeakScore -= 1;
-          addTest(tests, {
-            id: `dir-listing-${dirPath.replace(/\//g, "")}`, name: `Directory listing: ${dirPath}`, category: "info_leak",
-            status: "fail", severity: "critical", value: `Directory listing activé sur ${dirPath}`,
-            recommendation: "Désactivez le directory listing dans la configuration de votre serveur (Options -Indexes).",
-            deduction: 1,
-          });
-          break; // One is enough
-        }
-      }
+    const listedDirs = await detectExposedPaths(baseUrl, fetchWithTimeout, DIR_LISTING_PATHS, notFoundBaseline);
+    if (listedDirs.length > 0) {
+      const dirPath = listedDirs[0].spec.path; // One is enough
+      infoLeakScore -= 1;
+      addTest(tests, {
+        id: `dir-listing-${dirPath.replace(/\//g, "")}`, name: `Directory listing: ${dirPath}`, category: "info_leak",
+        status: "fail", severity: "critical", value: `Directory listing activé sur ${dirPath}`,
+        recommendation: "Désactivez le directory listing dans la configuration de votre serveur (Options -Indexes).",
+        deduction: 1,
+      });
     }
 
     // 3.9 robots.txt sensitive paths
@@ -884,26 +824,16 @@ export async function scanSecurity(targetUrl: string): Promise<SecurityScanResul
     }
 
     // 3.16 Server status/info pages (Apache)
-    const statusPages = ["/server-status", "/server-info"];
-    for (const path of statusPages) {
-      const statusRes = await fetchWithTimeout(
-        new URL(path, baseUrl).href,
-        { headers: { "User-Agent": "AIFriendly/1.0 (SecurityScan)" } },
-        5000
-      );
-      if (statusRes && statusRes.status === 200) {
-        const body = await statusRes.text();
-        if (body.includes("Apache") || body.includes("Server Version")) {
-          infoLeakScore -= 1;
-          addTest(tests, {
-            id: `server-page-${path.replace("/", "")}`, name: `Page serveur exposée: ${path}`, category: "info_leak",
-            status: "fail", severity: "critical",
-            value: `${path} est accessible publiquement`,
-            recommendation: `Bloquez l'accès à ${path} — il expose des informations critiques sur le serveur.`,
-            deduction: 1,
-          });
-        }
-      }
+    const statusPages = await detectExposedPaths(baseUrl, fetchWithTimeout, SERVER_STATUS_PAGES, notFoundBaseline);
+    for (const { spec: { path } } of statusPages) {
+      infoLeakScore -= 1;
+      addTest(tests, {
+        id: `server-page-${path.replace("/", "")}`, name: `Page serveur exposée: ${path}`, category: "info_leak",
+        status: "fail", severity: "critical",
+        value: `${path} est accessible publiquement`,
+        recommendation: `Bloquez l'accès à ${path} — il expose des informations critiques sur le serveur.`,
+        deduction: 1,
+      });
     }
 
     // ═══════════════════════════════════════════
@@ -1292,7 +1222,9 @@ export async function scanSecurity(targetUrl: string): Promise<SecurityScanResul
     );
     if (traceRes && traceRes.status === 200) {
       const traceBody = await traceRes.text();
-      if (traceBody.includes("TRACE")) {
+      // Un vrai écho TRACE renvoie la requête (« TRACE / HTTP/1.1 ») en message/http,
+      // pas une page qui mentionne simplement le mot TRACE.
+      if (isTraceEcho(traceRes.headers.get("content-type") || "", traceBody)) {
         injectionScore -= 0.5;
         addTest(tests, {
           id: "trace-enabled", name: "Méthode TRACE activée (XST)", category: "injection",
@@ -1315,7 +1247,9 @@ export async function scanSecurity(targetUrl: string): Promise<SecurityScanResul
         },
         10000
       );
-      if (methodRes && (methodRes.status === 200 || methodRes.status === 201 || methodRes.status === 204)) {
+      // Ignore les hébergeurs qui renvoient simplement la page (ou une 404) quelle que soit la méthode.
+      const methodBody = methodRes ? await methodRes.text().catch(() => "") : "";
+      if (methodRes && isMethodReallyAccepted(methodRes.status, methodBody, html)) {
         injectionScore -= 0.5;
         addTest(tests, {
           id: `method-${method.toLowerCase()}`, name: `Méthode ${method} autorisée`, category: "injection",

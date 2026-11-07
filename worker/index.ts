@@ -15,6 +15,10 @@ import { createHash } from "crypto";
 import { assertPatchedNodeRuntime, installBrotliSafeFetch } from "./lib/node-security.js";
 import { safeFetch, readBodyLimited } from "./lib/ssrf-guard.js";
 import { detectAdminPanels } from "./lib/admin-panel-detection.js";
+import {
+  API_DOC_PATHS, BACKUP_FILES, DIR_LISTING_PATHS, NotFoundBaseline, SENSITIVE_FILES, SERVER_STATUS_PAGES,
+  detectExposedPaths, isMethodReallyAccepted, isTraceEcho,
+} from "./lib/path-probe.js";
 
 // Mitigation CVE-2026-111497 (Node2Shell) — voir webapp/lib/node-security.ts
 assertPatchedNodeRuntime("aifriendly-worker");
@@ -873,34 +877,24 @@ async function scanSecurity(targetUrl: string) {
     const aspnetVer = headers.get("x-aspnet-version") || headers.get("x-aspnetmvc-version");
     if (aspnetVer) { infoLeakScore -= 0.3; tests.push({ id: "aspnet-version", name: "Version ASP.NET exposée", category: "info_leak", status: "warning", severity: "warning", value: aspnetVer, deduction: 0.3 }); }
 
-    // Sensitive files (expanded)
-    const sensitiveFiles = [
-      { path: "/.env", sev: "critical" }, { path: "/.env.local", sev: "critical" }, { path: "/.env.production", sev: "critical" },
-      { path: "/.git/HEAD", sev: "critical" }, { path: "/.git/config", sev: "critical" }, { path: "/.svn/entries", sev: "critical" },
-      { path: "/wp-config.php", sev: "critical" }, { path: "/wp-config.php.bak", sev: "critical" },
-      { path: "/.htpasswd", sev: "critical" }, { path: "/phpinfo.php", sev: "critical" },
-      { path: "/.npmrc", sev: "critical" }, { path: "/backup.sql", sev: "critical" }, { path: "/dump.sql", sev: "critical" },
-      { path: "/credentials.json", sev: "critical" },
-      { path: "/.htaccess", sev: "warning" }, { path: "/.DS_Store", sev: "warning" },
-      { path: "/web.config", sev: "warning" }, { path: "/composer.json", sev: "warning" },
-      { path: "/package.json", sev: "warning" }, { path: "/docker-compose.yml", sev: "warning" },
-      { path: "/error_log", sev: "warning" }, { path: "/debug.log", sev: "warning" },
-    ];
-    const fileChecks = sensitiveFiles.map(async (file) => {
-      const fileRes = await fetchWithTimeout(new URL(file.path, baseUrl).href, { headers: { "User-Agent": "AIFriendly/1.0" } }, 5000);
-      if (fileRes && fileRes.status === 200) {
-        const ct = fileRes.headers.get("content-type") || "";
-        if (!ct.includes("text/html")) {
-          const ded = file.sev === "critical" ? 2 : 0.5;
-          infoLeakScore -= ded;
-          tests.push({ id: `sensitive-${file.path}`, name: `Fichier sensible: ${file.path}`, category: "info_leak", status: "fail", severity: file.sev as "critical" | "warning", value: "Accessible", recommendation: `Bloquez l'accès à ${file.path}.`, deduction: ded });
-        }
-      }
-    });
-    await Promise.allSettled(fileChecks);
+    // Réponses aux chemins inexistants (soft 404 / catch-all), partagées par les tests de chemins.
+    const notFoundBaseline = new NotFoundBaseline(baseUrl, fetchWithTimeout);
+
+    // Sensitive files — le contenu doit ressembler au vrai fichier (pas une page 404 servie en 200)
+    for (const { spec: file } of await detectExposedPaths(baseUrl, fetchWithTimeout, SENSITIVE_FILES, notFoundBaseline)) {
+      const ded = file.severity === "critical" ? 2 : 0.5;
+      infoLeakScore -= ded;
+      tests.push({ id: `sensitive-${file.path}`, name: `Fichier sensible: ${file.path}`, category: "info_leak", status: "fail", severity: file.severity, value: "Accessible", recommendation: `Bloquez l'accès à ${file.path}.`, deduction: ded });
+    }
+
+    // Backup files
+    for (const { spec } of await detectExposedPaths(baseUrl, fetchWithTimeout, BACKUP_FILES, notFoundBaseline)) {
+      infoLeakScore -= 1;
+      tests.push({ id: `backup-${spec.path.replace(/\//g, "-")}`, name: `Sauvegarde: ${spec.path}`, category: "info_leak", status: "fail", severity: "critical", value: "Accessible", recommendation: `Supprimez ou bloquez l'accès à ${spec.path}.`, deduction: 1 });
+    }
 
     // Admin panels (ignore les pages catch-all de SPA, les blocages WAF et les 403)
-    const adminPanels = await detectAdminPanels(baseUrl, fetchWithTimeout);
+    const adminPanels = await detectAdminPanels(baseUrl, fetchWithTimeout, undefined, notFoundBaseline);
     for (const panel of adminPanels.findings) {
       infoLeakScore -= 0.3;
       tests.push({ id: `admin-${panel.path.replace(/\//g, "-")}`, name: `Admin: ${panel.path}`, category: "info_leak", status: "warning", severity: "warning", value: `${panel.product} — HTTP ${panel.status}`, recommendation: `Restreignez l'accès à ${panel.path} par IP/VPN.`, deduction: 0.3 });
@@ -911,27 +905,16 @@ async function scanSecurity(targetUrl: string) {
     }
 
     // API docs exposed
-    const apiDocPaths = ["/swagger", "/swagger-ui", "/swagger-ui.html", "/api-docs", "/graphql", "/graphiql"];
-    const apiChecks = apiDocPaths.map(async (path) => {
-      const apiRes = await fetchWithTimeout(new URL(path, baseUrl).href, { headers: { "User-Agent": "AIFriendly/1.0" } }, 5000);
-      if (apiRes && apiRes.status === 200) {
-        infoLeakScore -= 0.5;
-        tests.push({ id: `api-docs-${path.replace(/\//g, "-")}`, name: `API docs: ${path}`, category: "info_leak", status: "warning", severity: "warning", value: "Accessible", recommendation: `Protégez ${path} par authentification.`, deduction: 0.5 });
-      }
-    });
-    await Promise.allSettled(apiChecks);
+    for (const { spec } of await detectExposedPaths(baseUrl, fetchWithTimeout, API_DOC_PATHS, notFoundBaseline)) {
+      infoLeakScore -= 0.5;
+      tests.push({ id: `api-docs-${spec.path.replace(/\//g, "-")}`, name: `API docs: ${spec.path}`, category: "info_leak", status: "warning", severity: "warning", value: "Accessible", recommendation: `Protégez ${spec.path} par authentification.`, deduction: 0.5 });
+    }
 
     // Directory listing
-    for (const dirPath of ["/icons/", "/images/", "/uploads/", "/static/"]) {
-      const dirRes = await fetchWithTimeout(new URL(dirPath, baseUrl).href, { headers: { "User-Agent": "AIFriendly/1.0" } }, 5000);
-      if (dirRes && dirRes.status === 200) {
-        const dirBody = await dirRes.text();
-        if (dirBody.includes("Index of") || dirBody.includes("Directory listing") || dirBody.includes("[To Parent Directory]")) {
-          infoLeakScore -= 1;
-          tests.push({ id: `dir-listing`, name: `Directory listing: ${dirPath}`, category: "info_leak", status: "fail", severity: "critical", value: "Activé", recommendation: "Désactivez le directory listing.", deduction: 1 });
-          break;
-        }
-      }
+    const listedDirs = await detectExposedPaths(baseUrl, fetchWithTimeout, DIR_LISTING_PATHS, notFoundBaseline);
+    if (listedDirs.length > 0) {
+      infoLeakScore -= 1;
+      tests.push({ id: `dir-listing`, name: `Directory listing: ${listedDirs[0].spec.path}`, category: "info_leak", status: "fail", severity: "critical", value: "Activé", recommendation: "Désactivez le directory listing.", deduction: 1 });
     }
 
     // robots.txt sensitive paths
@@ -975,15 +958,9 @@ async function scanSecurity(targetUrl: string) {
     }
 
     // Server status pages
-    for (const path of ["/server-status", "/server-info"]) {
-      const sRes = await fetchWithTimeout(new URL(path, baseUrl).href, { headers: { "User-Agent": "AIFriendly/1.0" } }, 5000);
-      if (sRes && sRes.status === 200) {
-        const body = await sRes.text();
-        if (body.includes("Apache") || body.includes("Server Version")) {
-          infoLeakScore -= 1;
-          tests.push({ id: `server-page-${path.slice(1)}`, name: `Page serveur: ${path}`, category: "info_leak", status: "fail", severity: "critical", value: "Accessible", recommendation: `Bloquez l'accès à ${path}.`, deduction: 1 });
-        }
-      }
+    for (const { spec: { path } } of await detectExposedPaths(baseUrl, fetchWithTimeout, SERVER_STATUS_PAGES, notFoundBaseline)) {
+      infoLeakScore -= 1;
+      tests.push({ id: `server-page-${path.slice(1)}`, name: `Page serveur: ${path}`, category: "info_leak", status: "fail", severity: "critical", value: "Accessible", recommendation: `Bloquez l'accès à ${path}.`, deduction: 1 });
     }
 
     // ═══════════════════════════════════════════
@@ -1123,13 +1100,14 @@ async function scanSecurity(targetUrl: string) {
     const traceRes = await fetchWithTimeout(targetUrl, { method: "TRACE", headers: { "User-Agent": "AIFriendly/1.0" } }, 10000);
     if (traceRes && traceRes.status === 200) {
       const traceBody = await traceRes.text();
-      if (traceBody.includes("TRACE")) { injectionScore -= 0.5; tests.push({ id: "trace-enabled", name: "TRACE activé (XST)", category: "injection", status: "fail", severity: "warning", value: "Méthode TRACE activée", recommendation: "Désactivez TRACE.", deduction: 0.5 }); }
+      if (isTraceEcho(traceRes.headers.get("content-type") || "", traceBody)) { injectionScore -= 0.5; tests.push({ id: "trace-enabled", name: "TRACE activé (XST)", category: "injection", status: "fail", severity: "warning", value: "Méthode TRACE activée", recommendation: "Désactivez TRACE.", deduction: 0.5 }); }
     }
 
     // Dangerous HTTP methods
     for (const method of ["PUT", "DELETE"]) {
       const mRes = await fetchWithTimeout(targetUrl, { method, headers: { "User-Agent": "AIFriendly/1.0" } }, 10000);
-      if (mRes && [200, 201, 204].includes(mRes.status)) { injectionScore -= 0.5; tests.push({ id: `method-${method.toLowerCase()}`, name: `Méthode ${method} autorisée`, category: "injection", status: "warning", severity: "warning", value: `HTTP ${mRes.status}`, recommendation: `Restreignez ${method} par authentification.`, deduction: 0.5 }); }
+      const mBody = mRes ? await mRes.text().catch(() => "") : "";
+      if (mRes && isMethodReallyAccepted(mRes.status, mBody, html)) { injectionScore -= 0.5; tests.push({ id: `method-${method.toLowerCase()}`, name: `Méthode ${method} autorisée`, category: "injection", status: "warning", severity: "warning", value: `HTTP ${mRes.status}`, recommendation: `Restreignez ${method} par authentification.`, deduction: 0.5 }); }
     }
 
     // DOM XSS indicators

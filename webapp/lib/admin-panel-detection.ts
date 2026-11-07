@@ -10,15 +10,13 @@
  *    protection recommandée, pas une exposition ;
  *  - un 403 de l'origine signifie que l'accès est déjà refusé.
  *
- * Ce module ne dépend de rien (le fetch est injecté) afin d'être partagé entre
- * la webapp et le worker (copié dans worker/lib par le Dockerfile).
+ * Partagé par la webapp, le worker et le serveur MCP (copié dans lib/ par leurs
+ * Dockerfiles, avec path-probe.ts).
  */
 
-export type AdminProbeFetcher = (
-  url: string,
-  init: RequestInit,
-  timeoutMs: number
-) => Promise<Response | null>;
+import { NotFoundBaseline, looksLikeNotFound, probePath, type ProbeFetcher } from "./path-probe";
+
+export type AdminProbeFetcher = ProbeFetcher;
 
 export interface AdminPanelFinding {
   path: string;
@@ -31,12 +29,6 @@ export interface AdminPanelDetectionResult {
   findings: AdminPanelFinding[];
   /** Chemins bloqués par un WAF/CDN, avec le fournisseur détecté. */
   wafBlocked: { path: string; provider: string }[];
-}
-
-interface ProbeResponse {
-  status: number;
-  headers: Headers;
-  body: string;
 }
 
 interface AdminPathSpec {
@@ -62,9 +54,6 @@ export const DEFAULT_ADMIN_PATHS: AdminPathSpec[] = [
   { path: "/solr/", product: "Apache Solr", fingerprint: /solr/i },
   { path: "/jenkins", product: "Jenkins", fingerprint: /jenkins/i },
 ];
-
-const MAX_BODY_BYTES = 64 * 1024;
-const PROBE_UA = "AIFriendly/1.0 (SecurityScan)";
 
 /** Signatures des pages de blocage des principaux WAF/CDN. */
 const WAF_SIGNATURES: { provider: string; test: (h: Headers, body: string) => boolean }[] = [
@@ -101,62 +90,9 @@ export function detectWafBlock(status: number, headers: Headers, body: string): 
   return null;
 }
 
-function extractTitle(body: string): string {
-  return (body.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] || "").trim().toLowerCase();
-}
-
-/** Corps normalisé : retire les valeurs qui changent à chaque requête (nonces, tokens…). */
-function normalizeBody(body: string): string {
-  return body
-    .replace(/\b(nonce|csrf[-_]?token|_token|request[-_]?id|ray[-_]?id)\s*[=:]\s*["']?[\w+/=-]+["']?/gi, "")
-    .replace(/[0-9a-f]{16,}/gi, "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-/** Vrai si la réponse est identique (à peu près) à la page « catch-all » du site. */
-function isSameAsBaseline(res: ProbeResponse, baseline: ProbeResponse | null): boolean {
-  if (!baseline || res.status !== baseline.status) return false;
-  const a = normalizeBody(res.body);
-  const b = normalizeBody(baseline.body);
-  if (a === b) return true;
-  const maxLen = Math.max(a.length, b.length, 1);
-  return extractTitle(res.body) === extractTitle(baseline.body) && Math.abs(a.length - b.length) / maxLen < 0.05;
-}
-
 /** Une page de login rendue côté serveur (les SPA n'ont pas ce champ dans le HTML initial). */
 function looksLikeLoginPage(body: string): boolean {
   return /<input[^>]+type\s*=\s*["']?password/i.test(body) || /<title[^>]*>[^<]*(admin|login|log in|sign in|connexion)[^<]*<\/title>/i.test(body);
-}
-
-async function probe(fetcher: AdminProbeFetcher, url: string): Promise<ProbeResponse | null> {
-  const res = await fetcher(url, { redirect: "manual", headers: { "User-Agent": PROBE_UA } }, 5000);
-  if (!res) return null;
-  return { status: res.status, headers: res.headers, body: await readHead(res, MAX_BODY_BYTES) };
-}
-
-/** Lit au plus `maxBytes` du corps (les signatures sont toujours en début de page). */
-async function readHead(res: Response, maxBytes: number): Promise<string> {
-  if (!res.body) return "";
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let text = "";
-  let bytes = 0;
-  try {
-    while (bytes < maxBytes) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      const chunk = value.subarray(0, maxBytes - bytes);
-      bytes += chunk.byteLength;
-      text += decoder.decode(chunk, { stream: true });
-    }
-    await reader.cancel().catch(() => {});
-  } catch {
-    // Corps illisible : on garde ce qui a été lu.
-  } finally {
-    reader.releaseLock();
-  }
-  return text + decoder.decode();
 }
 
 /**
@@ -166,18 +102,17 @@ async function readHead(res: Response, maxBytes: number): Promise<string> {
 export async function detectAdminPanels(
   baseUrl: string,
   fetcher: AdminProbeFetcher,
-  paths: AdminPathSpec[] = DEFAULT_ADMIN_PATHS
+  paths: AdminPathSpec[] = DEFAULT_ADMIN_PATHS,
+  // Réponse à un chemin inexistant : révèle le comportement « catch-all » du site.
+  baseline: NotFoundBaseline = new NotFoundBaseline(baseUrl, fetcher)
 ): Promise<AdminPanelDetectionResult> {
-  // Chemin aléatoire inexistant : révèle le comportement « catch-all » du site.
-  const randomPath = `/aifriendly-probe-${Math.random().toString(36).slice(2, 12)}`;
-  const baseline = await probe(fetcher, new URL(randomPath, baseUrl).href);
 
   const findings: AdminPanelFinding[] = [];
   const wafBlocked: { path: string; provider: string }[] = [];
 
   await Promise.allSettled(
     paths.map(async (spec) => {
-      const res = await probe(fetcher, new URL(spec.path, baseUrl).href);
+      const res = await probePath(fetcher, new URL(spec.path, baseUrl).href);
       if (!res) return;
 
       const waf = detectWafBlock(res.status, res.headers, res.body);
@@ -188,7 +123,8 @@ export async function detectAdminPanels(
 
       // 403 : l'accès est déjà refusé — c'est l'état recommandé.
       if (res.status !== 200 && res.status !== 401) return;
-      if (isSameAsBaseline(res, baseline)) return;
+      if (looksLikeNotFound(res.body)) return;
+      if (await baseline.matches(spec.path, res)) return;
 
       if (res.status === 401) {
         // Authentification HTTP propre à ce chemin : le panneau existe et est exposé au brute force.
