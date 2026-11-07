@@ -141,6 +141,9 @@ export interface Dictionary {
     };
     signOut: string;
     scoreHistory: string;
+    scoreHistoryHint: string;
+    scoreHistoryFocused: string;
+    scoreHistoryShowAll: string;
     overviewSubtitle: string;
     noSitesTitle: string;
     noSitesDescription: string;
