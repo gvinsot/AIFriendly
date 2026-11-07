@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useI18n } from "@/lib/i18n/context";
+import { SiteFormModal } from "@/components/SiteFormModal";
 
 interface Site {
   id: string;
@@ -110,94 +111,45 @@ export default function SitesPage() {
             {t.sites.subtitle}
           </p>
         </div>
-        {!showForm && (
-          <button
-            onClick={() => {
-              setShowForm(true);
-              setEditingSite(null);
-              setFormData({ name: "", url: "" });
-            }}
-            className="rounded-lg border border-luxe-gold bg-luxe-gold/10 text-luxe-gold px-5 py-2.5 text-sm font-medium hover:bg-luxe-gold/20 transition-colors"
-          >
-            {t.sites.addSiteButton}
-          </button>
-        )}
+        <button
+          onClick={() => {
+            setShowForm(true);
+            setEditingSite(null);
+            setFormData({ name: "", url: "" });
+            setError(null);
+          }}
+          className="rounded-lg border border-luxe-gold bg-luxe-gold/10 text-luxe-gold px-5 py-2.5 text-sm font-medium hover:bg-luxe-gold/20 transition-colors"
+        >
+          {t.sites.addSiteButton}
+        </button>
       </div>
 
-      {/* Add/Edit form */}
-      {showForm && (
-        <form
-          onSubmit={handleSubmit}
-          className="rounded-2xl bg-luxe-bg-elevated border border-luxe-border shadow-luxe p-6 space-y-4"
-        >
-          <h2 className="font-display text-lg font-semibold text-luxe-fg">
-            {editingSite ? t.sites.editSite : t.sites.addSiteForm}
-          </h2>
-
-          {error && (
-            <p className="text-sm text-luxe-score-low">{error}</p>
-          )}
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs text-luxe-fg-muted mb-1.5">
-                {t.sites.siteName}
-              </label>
-              <input
-                type="text"
-                value={formData.name}
-                onChange={(e) =>
-                  setFormData({ ...formData, name: e.target.value })
-                }
-                placeholder={t.sites.siteNamePlaceholder}
-                required
-                className="w-full rounded-lg border border-luxe-border bg-luxe-bg px-4 py-2.5 text-sm text-luxe-fg placeholder-luxe-fg-muted/70 focus:outline-none focus:ring-1 focus:ring-luxe-border-focus"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-luxe-fg-muted mb-1.5">
-                {t.sites.url}
-              </label>
-              <input
-                type="url"
-                value={formData.url}
-                onChange={(e) =>
-                  setFormData({ ...formData, url: e.target.value })
-                }
-                placeholder={t.sites.urlPlaceholder}
-                required
-                className="w-full rounded-lg border border-luxe-border bg-luxe-bg px-4 py-2.5 text-sm text-luxe-fg placeholder-luxe-fg-muted/70 focus:outline-none focus:ring-1 focus:ring-luxe-border-focus"
-              />
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3 pt-2">
-            <button
-              type="submit"
-              disabled={saving}
-              className="rounded-lg border border-luxe-gold bg-luxe-gold/10 text-luxe-gold px-6 py-2.5 text-sm font-medium hover:bg-luxe-gold/20 disabled:opacity-50 transition-colors"
-            >
-              {saving ? t.sites.savingButton : editingSite ? t.common.edit : t.common.add}
-            </button>
-            <button
-              type="button"
-              onClick={cancelForm}
-              className="rounded-lg border border-luxe-border text-luxe-fg-muted px-6 py-2.5 text-sm hover:bg-luxe-bg-muted transition-colors"
-            >
-              {t.common.cancel}
-            </button>
-          </div>
-        </form>
-      )}
+      {/* Add/Edit modal */}
+      <SiteFormModal
+        open={showForm}
+        mode={editingSite ? "edit" : "add"}
+        formData={formData}
+        onChange={setFormData}
+        onSubmit={handleSubmit}
+        onClose={cancelForm}
+        saving={saving}
+        error={error}
+        submitLabel={editingSite ? t.common.edit : t.common.add}
+      />
 
       {/* Sites list */}
-      {sites.length === 0 && !showForm ? (
+      {sites.length === 0 ? (
         <div className="rounded-2xl bg-luxe-bg-elevated border border-luxe-border shadow-luxe p-12 text-center">
           <p className="text-luxe-fg-muted mb-4">
             {t.sites.noSitesYet}
           </p>
           <button
-            onClick={() => setShowForm(true)}
+            onClick={() => {
+              setShowForm(true);
+              setEditingSite(null);
+              setFormData({ name: "", url: "" });
+              setError(null);
+            }}
             className="inline-flex items-center gap-2 rounded-lg border border-luxe-gold bg-luxe-gold/10 text-luxe-gold px-5 py-2.5 text-sm font-medium hover:bg-luxe-gold/20 transition-colors"
           >
             {t.sites.addFirstSite}

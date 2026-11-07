@@ -19,6 +19,7 @@ export interface Dictionary {
     copy: string;
     back: string;
     cancel: string;
+    close: string;
     save: string;
     delete: string;
     edit: string;

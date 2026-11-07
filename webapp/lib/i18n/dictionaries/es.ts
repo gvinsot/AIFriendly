@@ -9,6 +9,7 @@ const es: Dictionary = {
     copy: "Copiar",
     back: "Volver",
     cancel: "Cancelar",
+    close: "Cerrar",
     save: "Guardar",
     delete: "Eliminar",
     edit: "Editar",
