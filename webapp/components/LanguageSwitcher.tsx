@@ -41,6 +41,7 @@ export function LanguageSwitcher({ className = "" }: { className?: string }) {
           {LOCALES.map((l) => (
             <button
               key={l.code}
+              type="button"
               onClick={() => {
                 setLocale(l.code);
                 setOpen(false);

@@ -53,6 +53,9 @@ export interface Dictionary {
     heroHeadline: string;
     heroSubheadline: string;
     heroCta: string;
+    heroBadgePrice: string;
+    heroBadgeSites: string;
+    heroBadgeMcp: string;
     heroSecondaryCta: string;
     // Analyze form
     urlPlaceholder: string;

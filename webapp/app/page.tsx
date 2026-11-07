@@ -163,7 +163,7 @@ export default function Home() {
       <div className="fixed inset-0 bg-gradient-to-b from-[rgba(34,211,238,0.06)] via-transparent to-transparent pointer-events-none" aria-hidden />
 
       {/* ─── NAV ─── */}
-      <nav className="relative z-10 border-b border-luxe-border bg-luxe-bg-elevated/80 backdrop-blur-sm">
+      <nav className="relative z-50 border-b border-luxe-border bg-luxe-bg-elevated/80 backdrop-blur-sm">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2">
             <span className="font-display text-2xl font-bold tracking-tight">
@@ -238,15 +238,15 @@ export default function Home() {
           <div className="flex items-center justify-center gap-6 text-xs text-luxe-fg-muted animate-fade-in-up animation-delay-400">
             <span className="flex items-center gap-1.5">
               <IconCheck />
-              10 €/month
+              {t.home.heroBadgePrice}
             </span>
             <span className="flex items-center gap-1.5">
               <IconCheck />
-              50 sites max
+              {t.home.heroBadgeSites}
             </span>
             <span className="flex items-center gap-1.5">
               <IconCheck />
-              MCP ready
+              {t.home.heroBadgeMcp}
             </span>
           </div>
         </div>

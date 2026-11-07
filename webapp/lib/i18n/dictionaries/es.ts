@@ -42,6 +42,9 @@ const es: Dictionary = {
     heroHeadline: "El primer servicio de monitoreo adaptado al Vibe Coding",
     heroSubheadline: "Disponibilidad, seguridad, accesibilidad IA — monítorealo todo con una sola herramienta. Tus agentes IA corrigen automáticamente vía MCP.",
     heroCta: "Empezar",
+    heroBadgePrice: "10 €/mes",
+    heroBadgeSites: "50 sitios máx.",
+    heroBadgeMcp: "Compatible con MCP",
     heroSecondaryCta: "Ver cómo funciona",
     // Analyze form
     urlPlaceholder: "https://ejemplo.com",
