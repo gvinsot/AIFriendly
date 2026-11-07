@@ -14,6 +14,7 @@ import * as cheerio from "cheerio";
 import { createHash } from "crypto";
 import { assertPatchedNodeRuntime, installBrotliSafeFetch } from "./lib/node-security.js";
 import { safeFetch, readBodyLimited } from "./lib/ssrf-guard.js";
+import { detectAdminPanels } from "./lib/admin-panel-detection.js";
 
 // Mitigation CVE-2026-111497 (Node2Shell) — voir webapp/lib/node-security.ts
 assertPatchedNodeRuntime("aifriendly-worker");
@@ -898,16 +899,16 @@ async function scanSecurity(targetUrl: string) {
     });
     await Promise.allSettled(fileChecks);
 
-    // Admin panels
-    const adminPaths = ["/admin", "/admin/", "/administrator", "/wp-admin", "/wp-login.php", "/phpmyadmin", "/adminer.php", "/cpanel"];
-    const adminChecks = adminPaths.map(async (path) => {
-      const adminRes = await fetchWithTimeout(new URL(path, baseUrl).href, { redirect: "manual", headers: { "User-Agent": "AIFriendly/1.0" } }, 5000);
-      if (adminRes && (adminRes.status === 200 || adminRes.status === 401 || adminRes.status === 403)) {
-        infoLeakScore -= 0.3;
-        tests.push({ id: `admin-${path.replace(/\//g, "-")}`, name: `Admin: ${path}`, category: "info_leak", status: "warning", severity: "warning", value: `HTTP ${adminRes.status}`, recommendation: `Restreignez l'accès à ${path} par IP/VPN.`, deduction: 0.3 });
-      }
-    });
-    await Promise.allSettled(adminChecks);
+    // Admin panels (ignore les pages catch-all de SPA, les blocages WAF et les 403)
+    const adminPanels = await detectAdminPanels(baseUrl, fetchWithTimeout);
+    for (const panel of adminPanels.findings) {
+      infoLeakScore -= 0.3;
+      tests.push({ id: `admin-${panel.path.replace(/\//g, "-")}`, name: `Admin: ${panel.path}`, category: "info_leak", status: "warning", severity: "warning", value: `${panel.product} — HTTP ${panel.status}`, recommendation: `Restreignez l'accès à ${panel.path} par IP/VPN.`, deduction: 0.3 });
+    }
+    if (adminPanels.wafBlocked.length > 0) {
+      const providers = [...new Set(adminPanels.wafBlocked.map((w) => w.provider))].join(", ");
+      tests.push({ id: "admin-waf-protected", name: "Admin: bloqué par WAF", category: "info_leak", status: "pass", severity: "info", value: `${providers} bloque ${adminPanels.wafBlocked.map((w) => w.path).join(", ")}`, deduction: 0 });
+    }
 
     // API docs exposed
     const apiDocPaths = ["/swagger", "/swagger-ui", "/swagger-ui.html", "/api-docs", "/graphql", "/graphiql"];

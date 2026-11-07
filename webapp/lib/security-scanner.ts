@@ -6,6 +6,7 @@
 
 import * as cheerio from "cheerio";
 import { safeFetch } from "./ssrf-guard";
+import { detectAdminPanels } from "./admin-panel-detection";
 
 const SECURITY_TIMEOUT_MS = 60000;
 
@@ -673,30 +674,27 @@ export async function scanSecurity(targetUrl: string): Promise<SecurityScanResul
     });
     await Promise.allSettled(backupChecks);
 
-    // 3.6 Admin panels detection
-    const adminPaths = [
-      "/admin", "/admin/", "/administrator", "/wp-admin", "/wp-login.php",
-      "/phpmyadmin", "/adminer.php", "/cpanel", "/_admin",
-      "/admin/login", "/manager/html", "/solr/", "/jenkins",
-    ];
-    const adminChecks = adminPaths.map(async (path) => {
-      const adminRes = await fetchWithTimeout(
-        new URL(path, baseUrl).href,
-        { redirect: "manual", headers: { "User-Agent": "AIFriendly/1.0 (SecurityScan)" } },
-        5000
-      );
-      if (adminRes && (adminRes.status === 200 || adminRes.status === 401 || adminRes.status === 403)) {
-        infoLeakScore -= 0.3;
-        addTest(tests, {
-          id: `admin-${path.replace(/\//g, "-")}`, name: `Panneau admin détecté: ${path}`, category: "info_leak",
-          status: "warning", severity: "warning",
-          value: `${path} retourne HTTP ${adminRes.status}`,
-          recommendation: `Restreignez l'accès à ${path} par IP ou VPN. Changez l'URL par défaut de l'admin.`,
-          deduction: 0.3,
-        });
-      }
-    });
-    await Promise.allSettled(adminChecks);
+    // 3.6 Admin panels detection (ignore les pages catch-all de SPA, les blocages WAF et les 403)
+    const adminPanels = await detectAdminPanels(baseUrl, fetchWithTimeout);
+    for (const panel of adminPanels.findings) {
+      infoLeakScore -= 0.3;
+      addTest(tests, {
+        id: `admin-${panel.path.replace(/\//g, "-")}`, name: `Panneau admin détecté: ${panel.path}`, category: "info_leak",
+        status: "warning", severity: "warning",
+        value: `${panel.product} — ${panel.path} retourne HTTP ${panel.status}`,
+        recommendation: `Restreignez l'accès à ${panel.path} par IP ou VPN. Changez l'URL par défaut de l'admin.`,
+        deduction: 0.3,
+      });
+    }
+    if (adminPanels.wafBlocked.length > 0) {
+      const providers = [...new Set(adminPanels.wafBlocked.map((w) => w.provider))].join(", ");
+      addTest(tests, {
+        id: "admin-waf-protected", name: "Chemins d'administration bloqués par un WAF", category: "info_leak",
+        status: "pass", severity: "info",
+        value: `${providers} bloque ${adminPanels.wafBlocked.map((w) => w.path).join(", ")}`,
+        deduction: 0,
+      });
+    }
 
     // 3.7 API documentation exposed
     const apiDocPaths = [
