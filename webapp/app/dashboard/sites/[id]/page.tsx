@@ -409,7 +409,11 @@ export default function SiteDetailPage() {
   async function handleAiPentest() {
     setPentesting(true); setError(null);
     try {
-      const res = await fetch(`/api/sites/${siteId}/security/ai-pentest`, { method: "POST" });
+      const res = await fetch(`/api/sites/${siteId}/security/ai-pentest`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ locale }),
+      });
       let data: AiPentestEntry | { error?: string } | null = null;
       try { data = await res.json(); } catch { /* corps non JSON */ }
       if (!res.ok) {
