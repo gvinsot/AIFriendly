@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireSubscribedUser } from "@/lib/api-auth";
-import { SsrfBlockedError } from "@/lib/ssrf-guard";
+import { ScanEgressError, SsrfBlockedError } from "@/lib/ssrf-guard";
 import { prisma } from "@/lib/prisma";
 import { scanSecurity } from "@/lib/security-scanner";
+import { OWNERSHIP_REQUIRED_MESSAGE, ensureSiteOwnership } from "@/lib/site-ownership";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -19,8 +20,12 @@ export async function POST(_req: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: "Site introuvable" }, { status: 404 });
   }
 
+  if (!(await ensureSiteOwnership(prisma, site))) {
+    return NextResponse.json({ error: OWNERSHIP_REQUIRED_MESSAGE, code: "OWNERSHIP_REQUIRED" }, { status: 403 });
+  }
+
   try {
-    const result = await scanSecurity(site.url);
+    const result = await scanSecurity(site.url, { depth: "full" });
 
     const scan = await prisma.securityScan.create({
       data: {
@@ -48,6 +53,9 @@ export async function POST(_req: NextRequest, context: RouteContext) {
   } catch (err) {
     if (err instanceof SsrfBlockedError) {
       return NextResponse.json({ error: "Cette URL n'est pas autorisée." }, { status: 400 });
+    }
+    if (err instanceof ScanEgressError) {
+      return NextResponse.json({ error: err.message, code: "SCAN_EGRESS" }, { status: 503 });
     }
     const message = err instanceof Error ? err.message : "Erreur lors du scan.";
     return NextResponse.json({ error: message }, { status: 500 });

@@ -665,9 +665,10 @@ export async function POST(request: NextRequest) {
     const analyzedAt = new Date().toISOString();
 
     // Run availability & security checks in parallel (scores only, details hidden for free)
+    // Route publique, URL quelconque, propriété non prouvée : scan passif uniquement.
     const [availResult, secResult] = await Promise.allSettled([
       checkAvailability(url),
-      scanSecurity(url),
+      scanSecurity(url, { depth: "passive" }),
     ]);
 
     const availabilityScore =

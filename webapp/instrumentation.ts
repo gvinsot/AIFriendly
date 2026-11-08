@@ -7,5 +7,10 @@ export async function register() {
     const { assertPatchedNodeRuntime, installBrotliSafeFetch } = await import("./lib/node-security");
     assertPatchedNodeRuntime("aifriendly-webapp");
     installBrotliSafeFetch();
+    // Modified 2026-11-08: resume persistent AI work without requiring a new click.
+    if (process.env.NEXT_PHASE !== "phase-production-build" && process.env.DB_CONNECTION_STRING) {
+      const { startPentestQueue } = await import("./lib/ai-pentest-queue");
+      startPentestQueue();
+    }
   }
 }

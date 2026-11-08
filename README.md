@@ -77,6 +77,10 @@ Déploiement en stack : s'assurer que les variables (ex. `TRAEFIK_HOST`) sont ex
 
 ## API
 
+Les parcours de scan standard et avancé, les outils de lecture de l'agent, les
+preuves masquées et les limites sont décrits dans
+[la documentation des scans de sécurité](docs/advanced-ai-scan.md).
+
 - **POST /api/analyze**  
   Body : `{ "url": "https://exemple.com" }`  
   Réponse : score, `improvements`, `aiPreview`, `aiPreviewYaml`, etc.

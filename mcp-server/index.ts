@@ -20,6 +20,7 @@ import { z } from "zod";
 import { analyzeUrl } from "./lib/analyzer.js";
 import { checkAvailability } from "./lib/availability-checker.js";
 import { scanSecurity } from "./lib/security-scanner.js";
+import { ensureSiteOwnership, ownershipHost } from "./lib/site-ownership.js";
 import {
   assertPatchedNodeRuntime,
   installBrotliSafeFetch,
@@ -350,7 +351,7 @@ function createMcpServerForUser(userId: string): McpServer {
     {
       title: "Run Security Scan",
       description:
-        "Run an OWASP-based security scan (headers, SSL, cookies, info leaks, injection). If site_id is provided, saves the result.",
+        "Run an OWASP-based security scan (headers, SSL, cookies, info leaks, injection) on one of your sites whose ownership is verified in the dashboard. If site_id is provided, saves the result.",
       inputSchema: z.object({
         site_id: z
           .string()
@@ -359,7 +360,7 @@ function createMcpServerForUser(userId: string): McpServer {
         url: z
           .string()
           .optional()
-          .describe("URL to scan (used if site_id is not provided)"),
+          .describe("URL to scan (used if site_id is not provided). Must be on the host of one of your verified sites."),
       }),
     },
     async ({ site_id, url }) => {
@@ -400,8 +401,26 @@ function createMcpServerForUser(userId: string): McpServer {
         };
       }
 
+      // Une URL libre doit tomber sur l'hôte d'un site vérifié de cet utilisateur.
+      const host = ownershipHost(targetUrl);
+      const candidates = await prisma.site.findMany({
+        where: site_id ? { id: site_id, userId } : { userId, ownershipVerifiedHost: host },
+      });
+      const owned = candidates.find((s) => ownershipHost(s.url) === host);
+      if (!owned || !(await ensureSiteOwnership(prisma, owned))) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: "Error: ownership of this site is not verified. Verify it from the site's Security tab in the AI Friendly dashboard.",
+            },
+          ],
+          isError: true,
+        };
+      }
+
       try {
-        const result = await scanSecurity(targetUrl);
+        const result = await scanSecurity(targetUrl, { depth: "full" });
 
         if (site_id) {
           await prisma.securityScan.create({
