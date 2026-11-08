@@ -91,6 +91,7 @@ model Site {
   analyses            AnalysisResult[]
   availabilityChecks  AvailabilityCheck[]
   securityScans       SecurityScan[]
+  aiPentestScans      AiPentestScan[]
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
 
@@ -147,4 +148,24 @@ model SecurityScan {
 
   @@index([siteId, createdAt])
   @@index([createdAt])
+}
+
+// Scan de pentest avancé piloté par un agent IA. Exécuté séquentiellement :
+// une seule analyse tourne à la fois, les suivantes passent en file d'attente.
+model AiPentestScan {
+  id          String    @id @default(cuid())
+  siteId      String
+  status      String    @default("queued") // "queued" | "running" | "done" | "failed"
+  score       Float? // risque global sur 10 (10 = très sûr)
+  summary     String? // résumé court du rapport
+  report      String? // rapport complet rédigé par l'agent (markdown)
+  findings    Json? // liste structurée des vulnérabilités trouvées
+  error       String? // message d'erreur si status = "failed"
+  site        Site      @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+  startedAt   DateTime?
+  completedAt DateTime?
+
+  @@index([siteId, createdAt])
+  @@index([status])
 }

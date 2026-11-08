@@ -277,6 +277,25 @@ export interface Dictionary {
       catCookies: string;
       catInfoLeak: string;
       catInjection: string;
+      aiScanButton: string;
+      aiScanningButton: string;
+      aiPentestHistory: string;
+      aiPentestHistoryHint: string;
+      aiPentestNoScan: string;
+      aiPentestReport: string;
+      aiPentestFindings: string;
+      aiPentestRecommendation: string;
+      aiPentestError: string;
+      aiRiskScore: string;
+      statusQueued: string;
+      statusRunning: string;
+      statusDone: string;
+      statusFailed: string;
+      severityCritical: string;
+      severityHigh: string;
+      severityMedium: string;
+      severityLow: string;
+      severityInfo: string;
     };
     // Empty states (flat structure to match actual translations)
     noAiTitle: string;

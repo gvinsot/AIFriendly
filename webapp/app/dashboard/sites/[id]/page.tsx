@@ -87,6 +87,29 @@ interface SecurityDetail {
   };
 }
 
+interface AiPentestEntry {
+  id: string;
+  status: "queued" | "running" | "done" | "failed" | string;
+  score: number | null;
+  summary: string | null;
+  createdAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+}
+
+interface AiPentestFinding {
+  title: string;
+  severity: "critical" | "high" | "medium" | "low" | "info" | string;
+  description: string;
+  recommendation: string;
+}
+
+interface AiPentestDetail extends AiPentestEntry {
+  report: string | null;
+  findings: AiPentestFinding[] | null;
+  error: string | null;
+}
+
 type TabId = "ai" | "availability" | "security";
 
 // ─── Score Badge ────────────────────────────────────────────────────────────
@@ -289,6 +312,10 @@ export default function SiteDetailPage() {
   const [selectedScan, setSelectedScan] = useState<SecurityDetail | null>(null);
   const [scanning, setScanning] = useState(false);
 
+  const [aiPentests, setAiPentests] = useState<AiPentestEntry[]>([]);
+  const [selectedPentest, setSelectedPentest] = useState<AiPentestDetail | null>(null);
+  const [pentesting, setPentesting] = useState(false);
+
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -300,22 +327,54 @@ export default function SiteDetailPage() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [siteRes, historyRes, availRes, secRes] = await Promise.all([
+      const [siteRes, historyRes, availRes, secRes, pentestRes] = await Promise.all([
         fetch(`/api/sites/${siteId}`),
         fetch(`/api/sites/${siteId}/history`),
         fetch(`/api/sites/${siteId}/availability`),
         fetch(`/api/sites/${siteId}/security`),
+        fetch(`/api/sites/${siteId}/security/ai-pentest`),
       ]);
       if (siteRes.ok) setSite(await siteRes.json());
       if (historyRes.ok) setAnalyses(await historyRes.json());
       if (availRes.ok) setAvailChecks(await availRes.json());
       if (secRes.ok) setSecurityScans(await secRes.json());
+      if (pentestRes.ok) setAiPentests(await pentestRes.json());
     } finally {
       setLoading(false);
     }
   }, [siteId]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  // Rafraîchit la liste des pentests IA (file + historique) sans tout recharger.
+  const refreshPentests = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/sites/${siteId}/security/ai-pentest`);
+      if (res.ok) setAiPentests(await res.json());
+    } catch { /* ignore */ }
+  }, [siteId]);
+
+  // Tant qu'un pentest est en attente ou en cours, on poll pour voir son avancement.
+  const hasPendingPentest = aiPentests.some(
+    (p) => p.status === "queued" || p.status === "running",
+  );
+  useEffect(() => {
+    if (!hasPendingPentest) return;
+    const interval = setInterval(() => {
+      refreshPentests();
+      // Rafraîchit aussi le détail ouvert s'il est en cours.
+      setSelectedPentest((cur) => {
+        if (cur && (cur.status === "queued" || cur.status === "running")) {
+          fetch(`/api/sites/${siteId}/security/ai-pentest/${cur.id}`)
+            .then((r) => (r.ok ? r.json() : null))
+            .then((d) => d && setSelectedPentest(d))
+            .catch(() => {});
+        }
+        return cur;
+      });
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [hasPendingPentest, refreshPentests, siteId]);
 
   // ─── Actions ────────────────────────────────────────────────────────────
 
@@ -346,6 +405,15 @@ export default function SiteDetailPage() {
     } catch { setError(t.common.connectionError); } finally { setScanning(false); }
   }
 
+  async function handleAiPentest() {
+    setPentesting(true); setError(null);
+    try {
+      const res = await fetch(`/api/sites/${siteId}/security/ai-pentest`, { method: "POST" });
+      if (!res.ok) { const d = await res.json(); setError(d.error || t.common.error); return; }
+      await refreshPentests();
+    } catch { setError(t.common.connectionError); } finally { setPentesting(false); }
+  }
+
   // ─── Detail loaders ─────────────────────────────────────────────────────
 
   async function viewAnalysisDetail(id: string) {
@@ -372,6 +440,15 @@ export default function SiteDetailPage() {
     try {
       const res = await fetch(`/api/sites/${siteId}/security/${id}`);
       if (res.ok) setSelectedScan(await res.json());
+    } finally { setLoadingDetail(false); }
+  }
+
+  async function viewPentestDetail(id: string) {
+    if (selectedPentest?.id === id) { setSelectedPentest(null); return; }
+    setLoadingDetail(true);
+    try {
+      const res = await fetch(`/api/sites/${siteId}/security/ai-pentest/${id}`);
+      if (res.ok) setSelectedPentest(await res.json());
     } finally { setLoadingDetail(false); }
   }
 
@@ -443,6 +520,9 @@ export default function SiteDetailPage() {
           scans={securityScans} selectedScan={selectedScan}
           scanning={scanning} loadingDetail={loadingDetail}
           onScan={handleScanNow} onViewDetail={viewScanDetail}
+          pentests={aiPentests} selectedPentest={selectedPentest}
+          pentesting={pentesting} onAiPentest={handleAiPentest}
+          onViewPentest={viewPentestDetail}
           dateLocale={dateLocale}
         />
       )}
@@ -645,10 +725,12 @@ function AvailabilityTab({ checks, selectedCheck, checking, loadingDetail, onChe
 // TAB: Security
 // ═══════════════════════════════════════════════════════════════════════════
 
-function SecurityTab({ scans, selectedScan, scanning, loadingDetail, onScan, onViewDetail, dateLocale }: {
+function SecurityTab({ scans, selectedScan, scanning, loadingDetail, onScan, onViewDetail, pentests, selectedPentest, pentesting, onAiPentest, onViewPentest, dateLocale }: {
   scans: SecurityEntry[]; selectedScan: SecurityDetail | null;
   scanning: boolean; loadingDetail: boolean;
   onScan: () => void; onViewDetail: (id: string) => void;
+  pentests: AiPentestEntry[]; selectedPentest: AiPentestDetail | null;
+  pentesting: boolean; onAiPentest: () => void; onViewPentest: (id: string) => void;
   dateLocale: string;
 }) {
   const { t } = useI18n();
@@ -665,7 +747,10 @@ function SecurityTab({ scans, selectedScan, scanning, loadingDetail, onScan, onV
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="font-display text-lg font-semibold text-luxe-fg">{t.siteDetail.security.title}</h2>
-        <ActionButton loading={scanning} onClick={onScan} label={t.siteDetail.security.scanButton} loadingLabel={t.siteDetail.security.scanningButton} />
+        <div className="flex items-center gap-2">
+          <ActionButton loading={scanning} onClick={onScan} label={t.siteDetail.security.scanButton} loadingLabel={t.siteDetail.security.scanningButton} />
+          <ActionButton loading={pentesting} onClick={onAiPentest} label={t.siteDetail.security.aiScanButton} loadingLabel={t.siteDetail.security.aiScanningButton} variant="gold" />
+        </div>
       </div>
 
       {/* Sub-scores */}
@@ -781,6 +866,168 @@ function SecurityTab({ scans, selectedScan, scanning, loadingDetail, onScan, onV
           </ul>
         )}
       </div>
+
+      {/* AI Pentest history (file d'attente + rapports de l'agent) */}
+      <AiPentestHistory
+        pentests={pentests}
+        selectedPentest={selectedPentest}
+        loadingDetail={loadingDetail}
+        onViewPentest={onViewPentest}
+        dateLocale={dateLocale}
+      />
+    </div>
+  );
+}
+
+// ─── AI Pentest history ───────────────────────────────────────────────────────
+
+function PentestStatusBadge({ status }: { status: string }) {
+  const { t } = useI18n();
+  const map: Record<string, { label: string; cls: string; dot?: boolean }> = {
+    queued: { label: t.siteDetail.security.statusQueued, cls: "bg-luxe-bg-muted text-luxe-fg-muted border-luxe-border" },
+    running: { label: t.siteDetail.security.statusRunning, cls: "bg-luxe-gold/15 text-luxe-gold border-luxe-gold/30", dot: true },
+    done: { label: t.siteDetail.security.statusDone, cls: "bg-luxe-score-high/15 text-luxe-score-high border-luxe-score-high/20" },
+    failed: { label: t.siteDetail.security.statusFailed, cls: "bg-luxe-score-low/15 text-luxe-score-low border-luxe-score-low/20" },
+  };
+  const s = map[status] || map.queued;
+  return (
+    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium border ${s.cls}`}>
+      {s.dot && <span className="size-2 rounded-full bg-luxe-gold animate-pulse" />}
+      {s.label}
+    </span>
+  );
+}
+
+function PentestSeverityBadge({ severity }: { severity: string }) {
+  const { t } = useI18n();
+  const map: Record<string, { label: string; cls: string }> = {
+    critical: { label: t.siteDetail.security.severityCritical, cls: "bg-luxe-score-low/20 text-luxe-score-low border-luxe-score-low/30" },
+    high: { label: t.siteDetail.security.severityHigh, cls: "bg-luxe-score-low/15 text-luxe-score-low border-luxe-score-low/20" },
+    medium: { label: t.siteDetail.security.severityMedium, cls: "bg-luxe-score-mid/15 text-luxe-score-mid border-luxe-score-mid/20" },
+    low: { label: t.siteDetail.security.severityLow, cls: "bg-luxe-gold/10 text-luxe-gold-muted border-luxe-border" },
+    info: { label: t.siteDetail.security.severityInfo, cls: "bg-luxe-bg-muted text-luxe-fg-muted border-luxe-border" },
+  };
+  const s = map[severity] || map.info;
+  return (
+    <span className={`mt-0.5 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium border ${s.cls}`}>
+      {s.label}
+    </span>
+  );
+}
+
+function AiPentestHistory({ pentests, selectedPentest, loadingDetail, onViewPentest, dateLocale }: {
+  pentests: AiPentestEntry[]; selectedPentest: AiPentestDetail | null;
+  loadingDetail: boolean; onViewPentest: (id: string) => void; dateLocale: string;
+}) {
+  const { t } = useI18n();
+  return (
+    <div className="rounded-2xl bg-luxe-bg-elevated border border-luxe-border shadow-luxe overflow-hidden">
+      <div className="px-6 py-4 border-b border-luxe-border bg-luxe-bg-muted/50">
+        <h3 className="font-display text-lg font-semibold text-luxe-fg">{t.siteDetail.security.aiPentestHistory}</h3>
+        <p className="text-xs text-luxe-fg-muted mt-0.5">{t.siteDetail.security.aiPentestHistoryHint}</p>
+      </div>
+
+      {pentests.length === 0 ? (
+        <div className="px-6 py-12 text-center text-luxe-fg-muted">{t.siteDetail.security.aiPentestNoScan}</div>
+      ) : (
+        <ul className="divide-y divide-luxe-border">
+          {pentests.map((p) => {
+            const pending = p.status === "queued" || p.status === "running";
+            return (
+              <li key={p.id}>
+                <button onClick={() => onViewPentest(p.id)}
+                  className={`w-full text-left px-6 py-3 flex items-center justify-between gap-3 hover:bg-luxe-bg-muted/30 transition-colors ${selectedPentest?.id === p.id ? "bg-luxe-bg-muted/40" : ""}`}>
+                  <div className="flex items-center gap-4 min-w-0">
+                    {p.status === "done" && p.score != null ? (
+                      <ScoreBadge score={p.score} size="sm" />
+                    ) : (
+                      <PentestStatusBadge status={p.status} />
+                    )}
+                    <div className="min-w-0">
+                      <p className="text-sm text-luxe-fg">
+                        {new Date(p.createdAt).toLocaleDateString(dateLocale, { weekday: "short", day: "numeric", month: "short" })}{" "}
+                        {new Date(p.createdAt).toLocaleTimeString(dateLocale, { hour: "2-digit", minute: "2-digit" })}
+                      </p>
+                      <p className="text-xs text-luxe-fg-muted truncate">
+                        {p.summary || (pending ? t.siteDetail.security.statusRunning : "—")}
+                      </p>
+                    </div>
+                  </div>
+                  {p.status === "done" && p.score != null && <PentestStatusBadge status={p.status} />}
+                </button>
+
+                {selectedPentest?.id === p.id && (
+                  <div className="border-t border-luxe-border bg-luxe-bg-muted/20 px-6 py-5 space-y-4">
+                    {loadingDetail ? <Spinner /> : (
+                      <>
+                        {selectedPentest.status === "failed" && (
+                          <p className="text-sm text-luxe-score-low">
+                            {t.siteDetail.security.aiPentestError}{selectedPentest.error ? ` — ${selectedPentest.error}` : ""}
+                          </p>
+                        )}
+
+                        {(selectedPentest.status === "queued" || selectedPentest.status === "running") && (
+                          <div className="flex items-center gap-3 text-sm text-luxe-fg-muted">
+                            <span className="size-4 rounded-full border-2 border-luxe-gold border-t-transparent animate-spin" />
+                            <span>
+                              {selectedPentest.status === "queued"
+                                ? t.siteDetail.security.statusQueued
+                                : t.siteDetail.security.statusRunning}
+                              …
+                            </span>
+                          </div>
+                        )}
+
+                        {selectedPentest.status === "done" && (
+                          <>
+                            {selectedPentest.score != null && (
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm text-luxe-fg-muted">{t.siteDetail.security.aiRiskScore} :</span>
+                                <ScoreBadge score={selectedPentest.score} />
+                              </div>
+                            )}
+
+                            {selectedPentest.findings && selectedPentest.findings.length > 0 && (
+                              <div>
+                                <h4 className="text-sm font-medium text-luxe-fg mb-2">{t.siteDetail.security.aiPentestFindings}</h4>
+                                <ul className="space-y-2">
+                                  {selectedPentest.findings.map((f, i) => (
+                                    <li key={i} className="flex items-start gap-2 text-sm">
+                                      <PentestSeverityBadge severity={f.severity} />
+                                      <div className="flex-1">
+                                        <p className="text-luxe-fg font-medium">{f.title}</p>
+                                        {f.description && <p className="text-xs text-luxe-fg-muted mt-0.5">{f.description}</p>}
+                                        {f.recommendation && (
+                                          <p className="text-xs text-luxe-gold mt-0.5">
+                                            {t.siteDetail.security.aiPentestRecommendation} : {f.recommendation}
+                                          </p>
+                                        )}
+                                      </div>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+
+                            {selectedPentest.report && (
+                              <div>
+                                <h4 className="text-sm font-medium text-luxe-fg mb-2">{t.siteDetail.security.aiPentestReport}</h4>
+                                <pre className="text-xs font-mono text-luxe-fg-muted bg-luxe-bg rounded-lg border border-luxe-border p-4 overflow-auto max-h-96 whitespace-pre-wrap preview-scroll">
+                                  {selectedPentest.report}
+                                </pre>
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 }
@@ -789,13 +1036,17 @@ function SecurityTab({ scans, selectedScan, scanning, loadingDetail, onScan, onV
 // SHARED UI COMPONENTS
 // ═══════════════════════════════════════════════════════════════════════════
 
-function ActionButton({ loading, onClick, label, loadingLabel }: { loading: boolean; onClick: () => void; label: string; loadingLabel: string }) {
+function ActionButton({ loading, onClick, label, loadingLabel, variant = "outline" }: { loading: boolean; onClick: () => void; label: string; loadingLabel: string; variant?: "outline" | "gold" }) {
+  const cls =
+    variant === "gold"
+      ? "rounded-lg border border-luxe-gold bg-luxe-gold text-luxe-bg px-5 py-2.5 text-sm font-medium hover:bg-luxe-gold/90 disabled:opacity-50 transition-colors"
+      : "rounded-lg border border-luxe-gold bg-luxe-gold/10 text-luxe-gold px-5 py-2.5 text-sm font-medium hover:bg-luxe-gold/20 disabled:opacity-50 transition-colors";
+  const spinnerColor = variant === "gold" ? "border-luxe-bg" : "border-luxe-gold";
   return (
-    <button onClick={onClick} disabled={loading}
-      className="rounded-lg border border-luxe-gold bg-luxe-gold/10 text-luxe-gold px-5 py-2.5 text-sm font-medium hover:bg-luxe-gold/20 disabled:opacity-50 transition-colors">
+    <button onClick={onClick} disabled={loading} className={cls}>
       {loading ? (
         <span className="inline-flex items-center gap-2">
-          <span className="size-3 rounded-full border-2 border-luxe-gold border-t-transparent animate-spin" />
+          <span className={`size-3 rounded-full border-2 ${spinnerColor} border-t-transparent animate-spin`} />
           {loadingLabel}
         </span>
       ) : label}
