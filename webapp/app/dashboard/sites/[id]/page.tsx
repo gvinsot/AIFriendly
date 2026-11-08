@@ -409,7 +409,18 @@ export default function SiteDetailPage() {
     setPentesting(true); setError(null);
     try {
       const res = await fetch(`/api/sites/${siteId}/security/ai-pentest`, { method: "POST" });
-      if (!res.ok) { const d = await res.json(); setError(d.error || t.common.error); return; }
+      let data: AiPentestEntry | { error?: string } | null = null;
+      try { data = await res.json(); } catch { /* corps non JSON */ }
+      if (!res.ok) {
+        const msg = (data && "error" in data && data.error) || t.common.error;
+        setError(msg);
+        return;
+      }
+      // Feedback immédiat : on insère/actualise la demande en tête de liste.
+      if (data && "id" in data && data.id) {
+        const entry = data as AiPentestEntry;
+        setAiPentests((prev) => [entry, ...prev.filter((p) => p.id !== entry.id)]);
+      }
       await refreshPentests();
     } catch { setError(t.common.connectionError); } finally { setPentesting(false); }
   }
@@ -753,6 +764,16 @@ function SecurityTab({ scans, selectedScan, scanning, loadingDetail, onScan, onV
         </div>
       </div>
 
+      {/* AI Pentest history (file d'attente + rapports de l'agent) — placé en
+          haut pour que le clic sur « Advanced AI Scan » soit visible aussitôt. */}
+      <AiPentestHistory
+        pentests={pentests}
+        selectedPentest={selectedPentest}
+        loadingDetail={loadingDetail}
+        onViewPentest={onViewPentest}
+        dateLocale={dateLocale}
+      />
+
       {/* Sub-scores */}
       {scans.length > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-6 gap-3">
@@ -866,15 +887,6 @@ function SecurityTab({ scans, selectedScan, scanning, loadingDetail, onScan, onV
           </ul>
         )}
       </div>
-
-      {/* AI Pentest history (file d'attente + rapports de l'agent) */}
-      <AiPentestHistory
-        pentests={pentests}
-        selectedPentest={selectedPentest}
-        loadingDetail={loadingDetail}
-        onViewPentest={onViewPentest}
-        dateLocale={dateLocale}
-      />
     </div>
   );
 }
