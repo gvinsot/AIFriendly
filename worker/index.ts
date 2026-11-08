@@ -17,6 +17,7 @@ import { safeFetch, readBodyLimited } from "./lib/ssrf-guard.js";
 // Scanner de sécurité partagé avec la webapp et le serveur MCP : les scans
 // planifiés exécutent exactement les mêmes tests que les scans manuels.
 import { scanSecurity } from "./lib/security-scanner.js";
+import { ensureSiteOwnership } from "./lib/site-ownership.js";
 
 // Mitigation CVE-2026-111497 (Node2Shell) — voir webapp/lib/node-security.ts
 assertPatchedNodeRuntime("aifriendly-worker");
@@ -739,9 +740,13 @@ async function processSecurityScans() {
 
   let scanned = 0;
   for (const site of sites) {
-    console.log(`  [SEC] Scanning: ${site.name} (${site.url})`);
     try {
-      const result = await scanSecurity(site.url);
+      if (!(await ensureSiteOwnership(prisma, site))) {
+        console.log(`  [SEC] Skipped, ownership not verified: ${site.name} (${site.url})`);
+        continue;
+      }
+      console.log(`  [SEC] Scanning: ${site.name} (${site.url})`);
+      const result = await scanSecurity(site.url, { depth: "full" });
       await prisma.securityScan.create({
         data: {
           siteId: site.id,

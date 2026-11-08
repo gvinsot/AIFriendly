@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { requireSubscribedUser, readJsonObject } from "@/lib/api-auth";
 import { validateAndNormalizeUrl } from "@/lib/urlSecurity";
+import { ownershipHost } from "@/lib/site-ownership";
 
 const MAX_SITE_NAME_LENGTH = 100;
 
@@ -76,6 +77,12 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: validation.error }, { status: 400 });
     }
     data.url = normalizedUrl;
+    // La preuve de propriété ne vaut que pour l'hôte vérifié.
+    if (ownershipHost(normalizedUrl) !== ownershipHost(existing.url)) {
+      data.ownershipVerifiedAt = null;
+      data.ownershipVerifiedHost = null;
+      data.ownershipMethod = null;
+    }
   }
   if (typeof isActive === "boolean") data.isActive = isActive;
 

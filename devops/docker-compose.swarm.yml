@@ -23,6 +23,7 @@ services:
       - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
       - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
       - STRIPE_PRICE_ID=${STRIPE_PRICE_ID}
+      - SCAN_PROXY_SECRET=${SCAN_PROXY_SECRET:-}
       - VLLM_API_URL=${VLLM_API_URL:-}
       - VLLM_API_KEY=${VLLM_API_KEY:-}
       - VLLM_MODEL=${VLLM_MODEL:-default}
@@ -74,6 +75,7 @@ services:
       dockerfile: mcp-server/Dockerfile
     environment:
       - DB_CONNECTION_STRING=${DB_CONNECTION_STRING}
+      - SCAN_PROXY_SECRET=${SCAN_PROXY_SECRET:-}
       - MCP_PORT=3001
     networks:
       - proxy
@@ -117,6 +119,7 @@ services:
       dockerfile: worker/Dockerfile
     environment:
       - DB_CONNECTION_STRING=${DB_CONNECTION_STRING}
+      - SCAN_PROXY_SECRET=${SCAN_PROXY_SECRET:-}
       - VLLM_API_URL=${VLLM_API_URL:-}
       - VLLM_API_KEY=${VLLM_API_KEY:-}
       - VLLM_MODEL=${VLLM_MODEL:-default}

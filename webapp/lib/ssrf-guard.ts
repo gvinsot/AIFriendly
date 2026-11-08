@@ -22,6 +22,9 @@
  * un domaine à TTL 0 pouvait répondre une IP publique à la vérification puis
  * 127.0.0.1 à la connexion).
  *
+ * `scanFetch` fait passer en plus la connexion par le proxy SOCKS5 du VPN : les
+ * scans de sécurité ne sortent jamais par l'IP du serveur (voir `readScanProxy`).
+ *
  * Fichier partagé : utilisé par la webapp, le serveur MCP et le worker
  * (copié dans `lib/` par leurs Dockerfiles). Aucune dépendance externe.
  */
@@ -30,8 +33,9 @@ import dns from "node:dns";
 import { lookup } from "node:dns/promises";
 import http from "node:http";
 import https from "node:https";
-import { isIP } from "node:net";
+import net, { isIP } from "node:net";
 import { Readable } from "node:stream";
+import tls from "node:tls";
 import zlib from "node:zlib";
 
 const ALLOWED_PROTOCOLS = new Set(["http:", "https:"]);
@@ -292,6 +296,261 @@ const validatingLookup = ((
   });
 }) as NonNullable<http.RequestOptions["lookup"]>;
 
+// ─── Sortie des scans par proxy SOCKS5 ─────────────────────────────────────
+//
+// Le nom est résolu et validé ICI, puis le proxy reçoit l'adresse IP : il ne
+// résout jamais rien lui-même, sinon le DNS rebinding contournerait la
+// validation. TLS reste de bout en bout : le proxy ne voit que du chiffré.
+
+const SOCKS_TIMEOUT_MS = 15_000;
+const SOCKS_MAX_ADDRESSES = 3;
+const SOCKS_REPLY_NOT_ALLOWED = 2;
+
+export type ScanEgressFailure = "not_configured" | "unavailable" | "blocked";
+
+/**
+ * Le scan ne peut pas sortir par le VPN, ou le site refuse son IP de sortie.
+ * Aucun score ne doit être calculé, et on ne se rabat jamais sur une connexion
+ * directe. Le message ne contient jamais les identifiants du proxy.
+ */
+export class ScanEgressError extends Error {
+  readonly reason: ScanEgressFailure;
+  constructor(reason: ScanEgressFailure, message: string) {
+    super(message);
+    this.name = "ScanEgressError";
+    this.reason = reason;
+  }
+}
+
+/** Le proxy fonctionne, mais la cible n'a pas pu être jointe à cette adresse. */
+class SocksTargetError extends Error {}
+
+interface ScanProxy {
+  host: string;
+  port: number;
+  username: string;
+  password: string;
+}
+
+const SCAN_PROXY_INVALID = "SCAN_PROXY_SECRET est invalide (format attendu : socks5://user:motdepasse@hote:1080).";
+
+/**
+ * Lit `SCAN_PROXY_SECRET` (`socks5://user:motdepasse@hote:1080`). Sans proxy, les
+ * scans sont refusés, sauf `SCAN_ALLOW_DIRECT=true` prévu pour le développement.
+ */
+function readScanProxy(): ScanProxy | null {
+  const raw = process.env.SCAN_PROXY_SECRET?.trim();
+  if (!raw) {
+    if (process.env.SCAN_ALLOW_DIRECT === "true") return null;
+    throw new ScanEgressError("not_configured", "Scan refusé : aucun proxy VPN n'est configuré (SCAN_PROXY_SECRET).");
+  }
+  let proxy: ScanProxy;
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== "socks5:" || !url.hostname) throw new Error("protocole");
+    proxy = {
+      host: unbracketHostname(url.hostname),
+      port: Number(url.port) || 1080,
+      username: decodeURIComponent(url.username),
+      password: decodeURIComponent(url.password),
+    };
+  } catch {
+    throw new ScanEgressError("not_configured", SCAN_PROXY_INVALID);
+  }
+  // RFC 1929 : longueurs codées sur un octet, et un mot de passe vide n'est pas une authentification.
+  const userBytes = Buffer.byteLength(proxy.username);
+  const passBytes = Buffer.byteLength(proxy.password);
+  if (userBytes > 255 || passBytes > 255 || (userBytes > 0 && passBytes === 0)) {
+    throw new ScanEgressError("not_configured", SCAN_PROXY_INVALID);
+  }
+  return proxy;
+}
+
+/** Vrai si les scans sortent effectivement par le proxy VPN. */
+export function isScanProxied(): boolean {
+  return !!process.env.SCAN_PROXY_SECRET?.trim();
+}
+
+/** Lit exactement `n` octets ; le surplus reste dans le tampon du socket. */
+function readBytes(socket: net.Socket, n: number): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const cleanup = () => {
+      socket.off("readable", onReadable);
+      socket.off("close", onClose);
+    };
+    const onClose = () => {
+      cleanup();
+      reject(new Error("Connexion SOCKS fermée."));
+    };
+    const onReadable = () => {
+      const chunk = socket.read(n) as Buffer | null;
+      if (chunk === null) return;
+      cleanup();
+      if (chunk.length < n) reject(new Error("Réponse SOCKS tronquée."));
+      else resolve(chunk);
+    };
+    socket.on("readable", onReadable);
+    socket.once("close", onClose);
+    onReadable();
+  });
+}
+
+async function socksAuthenticate(socket: net.Socket, proxy: ScanProxy): Promise<void> {
+  const method = proxy.username ? 2 : 0;
+  socket.write(Buffer.from([5, 1, method]));
+  const greeting = await readBytes(socket, 2);
+  if (greeting[0] !== 5 || greeting[1] !== method) {
+    throw new ScanEgressError("unavailable", "Proxy VPN : méthode d'authentification refusée.");
+  }
+  if (!proxy.username) return;
+  const user = Buffer.from(proxy.username);
+  const pass = Buffer.from(proxy.password);
+  socket.write(Buffer.concat([Buffer.from([1, user.length]), user, Buffer.from([pass.length]), pass]));
+  const reply = await readBytes(socket, 2);
+  if (reply[1] !== 0) throw new ScanEgressError("unavailable", "Proxy VPN : identifiants refusés.");
+}
+
+async function socksConnect(socket: net.Socket, ip: string, family: number, port: number): Promise<void> {
+  const address =
+    family === 6
+      ? Buffer.from(expandIPv6(ip)!.flatMap((word) => [word >> 8, word & 0xff]))
+      : Buffer.from(ip.split(".").map(Number));
+  socket.write(
+    Buffer.concat([Buffer.from([5, 1, 0, family === 6 ? 4 : 1]), address, Buffer.from([port >> 8, port & 0xff])])
+  );
+  const head = await readBytes(socket, 4);
+  if (head[0] !== 5) throw new ScanEgressError("unavailable", "Proxy VPN : réponse invalide.");
+  if (head[1] === SOCKS_REPLY_NOT_ALLOWED) {
+    throw new ScanEgressError("unavailable", "Proxy VPN : connexion interdite par le serveur.");
+  }
+  if (head[1] !== 0) throw new SocksTargetError(`Cible injoignable via le proxy (code SOCKS ${head[1]}).`);
+  const addressLength = head[3] === 1 ? 4 : head[3] === 4 ? 16 : (await readBytes(socket, 1))[0];
+  await readBytes(socket, addressLength + 2);
+}
+
+function abortReason(signal: AbortSignal): Error {
+  return signal.reason instanceof Error ? signal.reason : new DOMException("This operation was aborted", "AbortError");
+}
+
+/**
+ * Ouvre un tunnel vers `ip:port`. Une panne avant l'authentification incrimine
+ * le proxy (scan refusé) ; une panne après incrimine la cible, ce qui est un
+ * résultat normal, par exemple un port 80 fermé.
+ */
+function openSocksTunnel(
+  proxy: ScanProxy,
+  ip: string,
+  family: number,
+  port: number,
+  signal?: AbortSignal | null
+): Promise<net.Socket> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) return reject(abortReason(signal));
+    let authenticated = false;
+    const socket = net.connect({ host: proxy.host, port: proxy.port });
+    const cleanup = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", onAbort);
+      socket.off("error", onError);
+    };
+    const fail = (err: unknown) => {
+      cleanup();
+      socket.on("error", () => {}); // erreur tardive pendant destroy()
+      socket.destroy();
+      // L'abandon vient de l'appelant (y compris AbortSignal.timeout) : ni le proxy ni la cible ne sont en cause.
+      if (signal?.aborted) {
+        reject(abortReason(signal));
+      } else if (err instanceof ScanEgressError || err instanceof SocksTargetError) {
+        reject(err);
+      } else if (authenticated) {
+        reject(new SocksTargetError("Cible injoignable via le proxy."));
+      } else {
+        reject(new ScanEgressError("unavailable", "Proxy VPN injoignable."));
+      }
+    };
+    const onError = (err: Error) => fail(err);
+    const onAbort = () => fail(abortReason(signal!));
+    const timer = setTimeout(() => fail(new Error("Délai SOCKS dépassé.")), SOCKS_TIMEOUT_MS);
+    socket.once("error", onError);
+    signal?.addEventListener("abort", onAbort, { once: true });
+    socket.once("connect", () => {
+      socksAuthenticate(socket, proxy)
+        .then(() => {
+          authenticated = true;
+          return socksConnect(socket, ip, family, port);
+        })
+        .then(() => {
+          cleanup();
+          resolve(socket);
+        })
+        .catch(fail);
+    });
+  });
+}
+
+/** Chiffre le tunnel de bout en bout en vérifiant le certificat de la cible. */
+function upgradeToTls(socket: net.Socket, host: string, signal?: AbortSignal | null): Promise<tls.TLSSocket> {
+  return new Promise((resolve, reject) => {
+    const secure = tls.connect({
+      socket,
+      host, // nom utilisé pour vérifier le certificat
+      servername: isIP(host) ? undefined : host,
+      ALPNProtocols: ["http/1.1"],
+    });
+    const cleanup = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", onAbort);
+      secure.off("error", fail);
+    };
+    const fail = (err: Error) => {
+      cleanup();
+      secure.on("error", () => {});
+      secure.destroy();
+      reject(err);
+    };
+    const onAbort = () => fail(abortReason(signal!));
+    const timer = setTimeout(() => fail(new Error("Délai de négociation TLS dépassé.")), SOCKS_TIMEOUT_MS);
+    secure.once("error", fail);
+    signal?.addEventListener("abort", onAbort, { once: true });
+    secure.once("secureConnect", () => {
+      cleanup();
+      resolve(secure);
+    });
+  });
+}
+
+/** Résout le nom et ne retourne que des adresses publiques (même contrôle qu'en direct). */
+function resolveValidated(hostname: string): Promise<{ address: string; family: number }[]> {
+  return new Promise((resolve, reject) => {
+    (validatingLookup as unknown as (
+      host: string,
+      options: { all: boolean },
+      callback: (err: Error | null, addresses?: { address: string; family: number }[]) => void
+    ) => void)(hostname, { all: true }, (err, addresses) => (err ? reject(err) : resolve(addresses ?? [])));
+  });
+}
+
+async function openProxiedSocket(proxy: ScanProxy, target: URL, signal?: AbortSignal | null): Promise<net.Socket> {
+  const host = unbracketHostname(target.hostname);
+  const isHttps = target.protocol === "https:";
+  const port = Number(target.port) || (isHttps ? 443 : 80);
+  const addresses = (await resolveValidated(host))
+    .sort((a, b) => a.family - b.family) // IPv4 d'abord : prise en charge plus large côté proxy
+    .slice(0, SOCKS_MAX_ADDRESSES);
+
+  let lastError: unknown = new SocksTargetError("Aucune adresse à contacter.");
+  for (const { address, family } of addresses) {
+    try {
+      const tunnel = await openSocksTunnel(proxy, address, family, port, signal);
+      return isHttps ? await upgradeToTls(tunnel, host, signal) : tunnel;
+    } catch (err) {
+      if (!(err instanceof SocksTargetError)) throw err;
+      lastError = err;
+    }
+  }
+  throw lastError;
+}
+
 /** En-têtes à ne jamais propager vers une autre origine (redirect cross-origin). */
 const CROSS_ORIGIN_STRIPPED_HEADERS = ["authorization", "cookie", "proxy-authorization"];
 
@@ -312,9 +571,27 @@ function headersToRecord(headers: Headers): Record<string, string> {
  */
 function rawRequest(
   target: URL,
-  init: { method: string; headers: Headers; body?: unknown; signal?: AbortSignal | null }
+  init: { method: string; headers: Headers; body?: unknown; signal?: AbortSignal | null; egress?: "scan" }
 ): Promise<Response> {
   const lib = target.protocol === "https:" ? https : http;
+  const proxy = init.egress === "scan" ? readScanProxy() : null;
+  // Avec `createConnection` et sans `agent`, Node utilise exactement ce socket.
+  const connection: http.RequestOptions = proxy
+    ? {
+        // Sans agent, Node ignore le port par défaut et écrirait `Host: site:80`.
+        defaultPort: target.protocol === "https:" ? 443 : 80,
+        createConnection: ((_options: unknown, callback: (err: Error | null, socket?: net.Socket) => void) => {
+          openProxiedSocket(proxy, target, init.signal).then(
+            (socket) => callback(null, socket),
+            (err) => callback(err)
+          );
+          return undefined;
+        }) as unknown as http.RequestOptions["createConnection"],
+      }
+    : {
+        agent: false, // connexion dédiée : le lookup est revalidé à chaque requête
+        lookup: validatingLookup,
+      };
   const headers = new Headers(init.headers);
   if (!headers.has("accept-encoding")) headers.set("accept-encoding", "gzip, deflate");
   if (!headers.has("user-agent")) headers.set("user-agent", "AIFriendly/1.0 (ssrf-guard)");
@@ -334,8 +611,7 @@ function rawRequest(
       {
         method: init.method,
         headers: headersToRecord(headers),
-        agent: false, // connexion dédiée : le lookup est revalidé à chaque requête
-        lookup: validatingLookup,
+        ...connection,
         signal: init.signal ?? undefined,
       },
       (res) => {
@@ -400,6 +676,14 @@ function rawRequest(
 
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 
+export type SafeFetchOptions = RequestInit & {
+  maxBodyBytes?: number;
+  /** "scan" : sortie obligatoire par le proxy VPN. Préférer `scanFetch`. */
+  egress?: "scan";
+  /** Refuse de suivre une redirection vers une URL hors de ce périmètre. */
+  allowRedirect?: (url: URL) => boolean;
+};
+
 /**
  * `fetch` sécurisé pour les URL non fiables :
  *  - valide l'URL et la résolution DNS avant chaque requête ;
@@ -413,11 +697,8 @@ const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
  *
  * La `Response` retournée a pour `url` la dernière URL réellement contactée.
  */
-export async function safeFetch(
-  input: string | URL,
-  options: RequestInit & { maxBodyBytes?: number } = {}
-): Promise<Response> {
-  const { maxBodyBytes = DEFAULT_MAX_BODY_BYTES, ...init } = options;
+export async function safeFetch(input: string | URL, options: SafeFetchOptions = {}): Promise<Response> {
+  const { maxBodyBytes = DEFAULT_MAX_BODY_BYTES, egress, allowRedirect, ...init } = options;
   const mode = init.redirect ?? "follow";
   let current = await assertPublicUrl(input);
   let method = (init.method ?? "GET").toUpperCase();
@@ -427,7 +708,7 @@ export async function safeFetch(
   for (let hop = 0; ; hop++) {
     let res: Response;
     try {
-      res = await rawRequest(current, { method, headers, body, signal: init.signal });
+      res = await rawRequest(current, { method, headers, body, signal: init.signal, egress });
     } catch (err) {
       // Refus par le lookup de connexion (DNS rebinding, IP privée...) :
       // même erreur publique que la validation préalable.
@@ -449,6 +730,9 @@ export async function safeFetch(
     if (hop >= MAX_REDIRECTS) throw new TypeError("Trop de redirections.");
 
     const next = await assertPublicUrl(new URL(location, current));
+    if (allowRedirect && !allowRedirect(next)) {
+      throw new SsrfBlockedError("Redirection hors du périmètre autorisé.");
+    }
     // Ne pas propager d'identifiants vers une autre origine
     if (next.origin !== current.origin) {
       headers = new Headers(headers);
@@ -461,6 +745,11 @@ export async function safeFetch(
       body = undefined;
     }
   }
+}
+
+/** `safeFetch` pour les scans de sécurité : sort uniquement par le proxy VPN. */
+export function scanFetch(input: string | URL, options: SafeFetchOptions = {}): Promise<Response> {
+  return safeFetch(input, { ...options, egress: "scan" });
 }
 
 /**

@@ -12,7 +12,7 @@
  */
 
 import * as cheerio from "cheerio";
-import { safeFetch } from "./ssrf-guard";
+import { ScanEgressError, isScanProxied, scanFetch, type SafeFetchOptions } from "./ssrf-guard";
 import { detectAdminPanels } from "./admin-panel-detection";
 import {
   API_DOC_PATHS,
@@ -22,8 +22,6 @@ import {
   SENSITIVE_FILES,
   SERVER_STATUS_PAGES,
   detectExposedPaths,
-  isMethodReallyAccepted,
-  isTraceEcho,
 } from "./path-probe";
 
 const SECURITY_TIMEOUT_MS = 60000;
@@ -53,17 +51,34 @@ interface SecurityScanResult {
   };
 }
 
-async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = 10000): Promise<Response | null> {
+async function fetchWithTimeout(url: string, options: SafeFetchOptions = {}, timeoutMs = 10000): Promise<Response | null> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const res = await safeFetch(url, { ...options, signal: controller.signal });
+    const res = await scanFetch(url, { ...options, signal: controller.signal });
     clearTimeout(timeout);
     return res;
-  } catch {
+  } catch (err) {
     clearTimeout(timeout);
+    // Une panne du VPN n'est pas un résultat de test : elle doit annuler le scan.
+    if (err instanceof ScanEgressError) throw err;
     return null;
   }
+}
+
+/**
+ * "full" sonde des chemins sensibles et envoie des en-têtes forgés : réservé aux
+ * sites dont la propriété est vérifiée. "passive" se limite à lire la page, ses
+ * en-têtes, robots.txt et security.txt, pour les URL quelconques.
+ */
+export type ScanDepth = "full" | "passive";
+
+const WAF_BLOCK_RE = /just a moment|attention required|captcha|access denied|request blocked|ddos[- ]protection|ddos-guard|incapsula|sucuri|forbidden/i;
+
+/** La réponse ressemble à un refus de l'IP de sortie du VPN plutôt qu'à la vraie page. */
+function looksBlockedByWaf(status: number, headers: Headers, html: string): boolean {
+  if (status !== 403 && status !== 429 && status !== 503) return false;
+  return headers.has("cf-mitigated") || WAF_BLOCK_RE.test(html.slice(0, 20_000));
 }
 
 function addTest(tests: SecurityTestResult[], test: SecurityTestResult) {
@@ -100,8 +115,10 @@ function isSameSite(host: string | null, siteHost: string): boolean {
 /** Nom de cookie typique d'une session / d'un jeton d'authentification. */
 const SESSION_COOKIE_RE = /sess|sid\b|^sid|token|auth|jwt|login|remember/i;
 
-export async function scanSecurity(targetUrl: string): Promise<SecurityScanResult> {
+export async function scanSecurity(targetUrl: string, options: { depth: ScanDepth }): Promise<SecurityScanResult> {
   const tests: SecurityTestResult[] = [];
+  // Les sondes tournent dans des Promise.allSettled qui avaleraient cette panne.
+  const egressFailures: ScanEgressError[] = [];
   let headersScore = 10;
   let sslScore = 10;
   let cookiesScore = 10;
@@ -113,7 +130,7 @@ export async function scanSecurity(targetUrl: string): Promise<SecurityScanResul
 
   try {
     // Main request to get headers, cookies, and HTML
-    const res = await safeFetch(targetUrl, {
+    const res = await scanFetch(targetUrl, {
       signal: controller.signal,
       redirect: "follow",
       headers: { "User-Agent": "AIFriendly/1.0 (SecurityScan)" },
@@ -121,6 +138,13 @@ export async function scanSecurity(targetUrl: string): Promise<SecurityScanResul
 
     const headers = res.headers;
     const html = await res.text();
+    // Noter la page de blocage du WAF donnerait un score sans rapport avec le site.
+    if (isScanProxied() && looksBlockedByWaf(res.status, headers, html)) {
+      throw new ScanEgressError(
+        "blocked",
+        "Le site a refusé l'IP de sortie du VPN (WAF ou anti-bot) : aucun score n'a été calculé. Réessayez plus tard ou autorisez le User-Agent AIFriendly."
+      );
+    }
     const $ = cheerio.load(html);
     // URL finale après redirections : c'est elle qui détermine si la page est servie en HTTPS.
     const finalUrl = res.url || targetUrl;
@@ -128,6 +152,33 @@ export async function scanSecurity(targetUrl: string): Promise<SecurityScanResul
     const siteHost = new URL(finalUrl).hostname;
     const baseUrl = new URL(finalUrl).origin;
     const setCookies = res.headers.getSetCookie?.() || [];
+
+    // La preuve de propriété porte sur le domaine demandé : si le site redirige
+    // ailleurs, ou si une sonde est redirigée ailleurs, on ne sonde pas ce tiers.
+    const targetHost = new URL(targetUrl).hostname.toLowerCase();
+    const inScope = (url: URL) => isSameSite(url.hostname.toLowerCase(), targetHost);
+    const leftScope = !isSameSite(siteHost, targetHost);
+    const probesAllowed = options.depth === "full" && !leftScope;
+    const probe: typeof fetchWithTimeout = probesAllowed
+      ? async (url, probeOptions = {}, timeoutMs) => {
+          try {
+            return await fetchWithTimeout(url, { ...probeOptions, allowRedirect: inScope }, timeoutMs);
+          } catch (err) {
+            if (err instanceof ScanEgressError) egressFailures.push(err);
+            throw err;
+          }
+        }
+      : async () => null;
+    if (!probesAllowed) {
+      addTest(tests, {
+        id: "probes-skipped", name: "Sondes de chemins sensibles", category: "info_leak",
+        status: "warning", severity: "info",
+        value: leftScope
+          ? "Non exécutées : le site redirige vers un autre domaine que celui vérifié"
+          : "Non exécutées : analyse publique limitée aux informations visibles",
+        deduction: 0,
+      });
+    }
 
     // CSP : en-tête HTTP, ou à défaut balise <meta http-equiv> (qui ne supporte pas frame-ancestors).
     const metaCsp = $('meta[http-equiv="Content-Security-Policy" i]').attr("content") || null;
@@ -661,11 +712,11 @@ export async function scanSecurity(targetUrl: string): Promise<SecurityScanResul
 
     // Réponses du site aux chemins inexistants (détection des soft 404 / pages catch-all),
     // partagées par tous les tests de chemins ci-dessous.
-    const notFoundBaseline = new NotFoundBaseline(baseUrl, fetchWithTimeout);
+    const notFoundBaseline = new NotFoundBaseline(baseUrl, probe);
 
     // 3.4 Sensitive files check — le contenu doit ressembler au vrai fichier
     // (une page 404 servie en HTTP 200 n'est pas signalée).
-    const exposedFiles = await detectExposedPaths(baseUrl, fetchWithTimeout, SENSITIVE_FILES, notFoundBaseline);
+    const exposedFiles = await detectExposedPaths(baseUrl, probe, SENSITIVE_FILES, notFoundBaseline);
     for (const { spec: file, res } of exposedFiles) {
       const ded = file.severity === "critical" ? 2 : 0.5;
       infoLeakScore -= ded;
@@ -679,7 +730,7 @@ export async function scanSecurity(targetUrl: string): Promise<SecurityScanResul
     }
 
     // 3.5 Backup file extensions
-    const exposedBackups = await detectExposedPaths(baseUrl, fetchWithTimeout, BACKUP_FILES, notFoundBaseline);
+    const exposedBackups = await detectExposedPaths(baseUrl, probe, BACKUP_FILES, notFoundBaseline);
     for (const { spec } of exposedBackups) {
       infoLeakScore -= 1;
       addTest(tests, {
@@ -691,7 +742,7 @@ export async function scanSecurity(targetUrl: string): Promise<SecurityScanResul
     }
 
     // 3.6 Admin panels detection (ignore les pages catch-all de SPA, les blocages WAF et les 403)
-    const adminPanels = await detectAdminPanels(baseUrl, fetchWithTimeout, undefined, notFoundBaseline);
+    const adminPanels = await detectAdminPanels(baseUrl, probe, undefined, notFoundBaseline);
     for (const panel of adminPanels.findings) {
       infoLeakScore -= 0.3;
       addTest(tests, {
@@ -713,7 +764,7 @@ export async function scanSecurity(targetUrl: string): Promise<SecurityScanResul
     }
 
     // 3.7 API documentation exposed
-    const exposedApiDocs = await detectExposedPaths(baseUrl, fetchWithTimeout, API_DOC_PATHS, notFoundBaseline);
+    const exposedApiDocs = await detectExposedPaths(baseUrl, probe, API_DOC_PATHS, notFoundBaseline);
     for (const { spec } of exposedApiDocs) {
       infoLeakScore -= 0.5;
       addTest(tests, {
@@ -725,7 +776,7 @@ export async function scanSecurity(targetUrl: string): Promise<SecurityScanResul
     }
 
     // 3.8 Directory listing check (multiple directories)
-    const listedDirs = await detectExposedPaths(baseUrl, fetchWithTimeout, DIR_LISTING_PATHS, notFoundBaseline);
+    const listedDirs = await detectExposedPaths(baseUrl, probe, DIR_LISTING_PATHS, notFoundBaseline);
     if (listedDirs.length > 0) {
       const dirPath = listedDirs[0].spec.path; // One is enough
       infoLeakScore -= 1;
@@ -891,7 +942,7 @@ export async function scanSecurity(targetUrl: string): Promise<SecurityScanResul
     }
 
     // 3.16 Server status/info pages (Apache)
-    const statusPages = await detectExposedPaths(baseUrl, fetchWithTimeout, SERVER_STATUS_PAGES, notFoundBaseline);
+    const statusPages = await detectExposedPaths(baseUrl, probe, SERVER_STATUS_PAGES, notFoundBaseline);
     for (const { spec: { path } } of statusPages) {
       infoLeakScore -= 1;
       addTest(tests, {
@@ -1069,160 +1120,11 @@ export async function scanSecurity(targetUrl: string): Promise<SecurityScanResul
     // (L'ancien test « autocomplete=off sur les mots de passe » est supprimé : c'est un
     // anti-pattern selon OWASP/NIST — il gêne les gestionnaires de mots de passe et est ignoré.)
 
-    // 5.2 Reflected XSS check (canary)
-    const xssTestUrl = new URL(targetUrl);
-    const canary = "aifriendly_xss_probe_12345";
-    xssTestUrl.searchParams.set("q", canary);
-    xssTestUrl.searchParams.set("search", canary);
-    const xssRes = await fetchWithTimeout(
-      xssTestUrl.href,
-      { headers: { "User-Agent": "AIFriendly/1.0 (SecurityScan)" } },
-      10000
-    );
-    if (xssRes) {
-      const xssBody = await xssRes.text();
-      if (xssBody.includes(canary)) {
-        // Check if it's properly escaped or raw
-        const isInTag = xssBody.includes(`"${canary}"`) || xssBody.includes(`'${canary}'`) || xssBody.includes(`=${canary}`);
-        injectionScore -= isInTag ? 2 : 1;
-        addTest(tests, {
-          id: "reflected-input", name: "Entrées réfléchies (XSS potentiel)", category: "injection",
-          status: "fail", severity: "critical",
-          value: isInTag
-            ? "Des paramètres d'URL sont réfléchis DANS des attributs HTML — risque XSS élevé"
-            : "Des paramètres d'URL sont réfléchis dans le HTML sans échappement apparent",
-          recommendation: "Échappez toutes les entrées utilisateur avant de les injecter dans le HTML. Utilisez une bibliothèque d'échappement contextuel.",
-          deduction: isInTag ? 2 : 1,
-        });
-      } else {
-        addTest(tests, {
-          id: "no-reflected", name: "Entrées réfléchies", category: "injection",
-          status: "pass", severity: "info", value: "Aucune réflexion détectée",
-          deduction: 0,
-        });
-      }
-    }
-
-    // 5.3 HTML injection test
-    const htmlCanary = "<b>aifriendly_html_test</b>";
-    const htmlTestUrl = new URL(targetUrl);
-    htmlTestUrl.searchParams.set("q", htmlCanary);
-    const htmlInjRes = await fetchWithTimeout(
-      htmlTestUrl.href,
-      { headers: { "User-Agent": "AIFriendly/1.0 (SecurityScan)" } },
-      10000
-    );
-    if (htmlInjRes) {
-      const htmlInjBody = await htmlInjRes.text();
-      if (htmlInjBody.includes(htmlCanary)) {
-        injectionScore -= 1.5;
-        addTest(tests, {
-          id: "html-injection", name: "Injection HTML détectée", category: "injection",
-          status: "fail", severity: "critical",
-          value: "Du HTML injecté via les paramètres est rendu sans échappement",
-          recommendation: "Échappez toutes les entrées utilisateur. Les balises HTML ne doivent jamais être rendues telles quelles.",
-          deduction: 1.5,
-        });
-      }
-    }
-
-    // 5.4 Open redirect (multiple parameters)
-    const redirectParams = ["redirect", "url", "next", "return", "returnUrl", "return_to", "goto", "continue", "dest", "destination", "redir", "redirect_uri", "callback"];
-    let openRedirectFound = false;
-    for (const param of redirectParams) {
-      if (openRedirectFound) break;
-      const redirectTestUrl = new URL(targetUrl);
-      redirectTestUrl.searchParams.set(param, "https://evil.com");
-      const redirectRes = await fetchWithTimeout(
-        redirectTestUrl.href,
-        { redirect: "manual", headers: { "User-Agent": "AIFriendly/1.0 (SecurityScan)" } },
-        10000
-      );
-      if (redirectRes && redirectRes.status >= 300 && redirectRes.status < 400) {
-        const locHost = hostOf(redirectRes.headers.get("location") || "", redirectTestUrl.href);
-        if (locHost === "evil.com" || locHost?.endsWith(".evil.com")) {
-          injectionScore -= 1;
-          addTest(tests, {
-            id: "open-redirect", name: "Open redirect détecté", category: "injection",
-            status: "fail", severity: "critical",
-            value: `Redirection vers un domaine externe via le paramètre '${param}'`,
-            recommendation: "Validez les URLs de redirection côté serveur. Utilisez une whitelist de domaines autorisés.",
-            deduction: 1,
-          });
-          openRedirectFound = true;
-        }
-      }
-    }
-
-    // 5.5 SQL injection error-based detection
-    const sqlPayloads = ["'", "1' OR '1'='1", "1; DROP TABLE", "' UNION SELECT 1--"];
-    let sqlInjectionFound = false;
-    const sqlErrorPatterns = [
-      "SQL syntax", "mysql_fetch", "pg_query", "ORA-0", "ORA-1", "SQLite3::",
-      "Unclosed quotation mark", "SQLSTATE", "syntax error at or near",
-      "Microsoft OLE DB", "ODBC SQL Server Driver", "JET Database Engine",
-      "valid MySQL result", "PostgreSQL query failed", "unterminated quoted string",
-    ];
-    for (const payload of sqlPayloads) {
-      if (sqlInjectionFound) break;
-      const sqlTestUrl = new URL(targetUrl);
-      sqlTestUrl.searchParams.set("id", payload);
-      sqlTestUrl.searchParams.set("q", payload);
-      const sqlRes = await fetchWithTimeout(
-        sqlTestUrl.href,
-        { headers: { "User-Agent": "AIFriendly/1.0 (SecurityScan)" } },
-        10000
-      );
-      if (sqlRes) {
-        const sqlBody = await sqlRes.text();
-        // La signature doit être absente de la page normale (ex. un blog qui parle de SQL).
-        if (sqlErrorPatterns.some(pattern => sqlBody.includes(pattern) && !html.includes(pattern))) {
-          injectionScore -= 2;
-          addTest(tests, {
-            id: "sql-injection", name: "Injection SQL potentielle", category: "injection",
-            status: "fail", severity: "critical",
-            value: "Des erreurs SQL sont retournées en réponse à des caractères spéciaux — injection SQL probable",
-            recommendation: "Utilisez des requêtes préparées (parameterized queries) et un ORM. Ne jamais concaténer les entrées utilisateur dans les requêtes SQL.",
-            deduction: 2,
-          });
-          sqlInjectionFound = true;
-        }
-      }
-    }
-
-    // 5.6 Path traversal detection
-    const pathTraversalPayloads = ["../../etc/passwd", "..\\..\\windows\\win.ini", "....//....//etc/passwd"];
-    let pathTraversalFound = false;
-    for (const payload of pathTraversalPayloads) {
-      if (pathTraversalFound) break;
-      const ptTestUrl = new URL(targetUrl);
-      ptTestUrl.searchParams.set("file", payload);
-      ptTestUrl.searchParams.set("path", payload);
-      const ptRes = await fetchWithTimeout(
-        ptTestUrl.href,
-        { headers: { "User-Agent": "AIFriendly/1.0 (SecurityScan)" } },
-        10000
-      );
-      if (ptRes) {
-        const ptBody = await ptRes.text();
-        // Contenu réel de /etc/passwd ou win.ini, absent de la page normale.
-        const leaked = /root:[x*]?:0:0:/.test(ptBody) || /^\[(extensions|fonts|mci extensions)\]/im.test(ptBody);
-        if (leaked && !/root:[x*]?:0:0:/.test(html)) {
-          injectionScore -= 2;
-          addTest(tests, {
-            id: "path-traversal", name: "Path traversal détecté", category: "injection",
-            status: "fail", severity: "critical",
-            value: "Le serveur retourne le contenu de fichiers système en réponse à des chemins relatifs",
-            recommendation: "Validez et assainissez tous les chemins de fichiers. Utilisez une whitelist de fichiers autorisés.",
-            deduction: 2,
-          });
-          pathTraversalFound = true;
-        }
-      }
-    }
+    // Modified 2026-11-08: standard scan checks configuration and public exposure.
+    // No injected SQL/HTML/path traversal payloads or state-changing HTTP methods.
 
     // 5.7 CORS misconfiguration
-    const corsRes = await fetchWithTimeout(
+    const corsRes = await probe(
       targetUrl,
       {
         headers: {
@@ -1268,56 +1170,6 @@ export async function scanSecurity(targetUrl: string): Promise<SecurityScanResul
       }
     }
 
-    // 5.8 TRACE method enabled (Cross-Site Tracing)
-    const traceRes = await fetchWithTimeout(
-      targetUrl,
-      {
-        method: "TRACE",
-        headers: { "User-Agent": "AIFriendly/1.0 (SecurityScan)" },
-      },
-      10000
-    );
-    if (traceRes && traceRes.status === 200) {
-      const traceBody = await traceRes.text();
-      // Un vrai écho TRACE renvoie la requête (« TRACE / HTTP/1.1 ») en message/http,
-      // pas une page qui mentionne simplement le mot TRACE.
-      if (isTraceEcho(traceRes.headers.get("content-type") || "", traceBody)) {
-        injectionScore -= 0.5;
-        addTest(tests, {
-          id: "trace-enabled", name: "Méthode TRACE activée (XST)", category: "injection",
-          status: "fail", severity: "warning",
-          value: "La méthode HTTP TRACE est activée — permet le Cross-Site Tracing",
-          recommendation: "Désactivez la méthode TRACE dans la configuration de votre serveur web.",
-          deduction: 0.5,
-        });
-      }
-    }
-
-    // 5.9 Dangerous HTTP methods (PUT, DELETE)
-    const dangerousMethods = ["PUT", "DELETE"];
-    for (const method of dangerousMethods) {
-      const methodRes = await fetchWithTimeout(
-        targetUrl,
-        {
-          method: method,
-          headers: { "User-Agent": "AIFriendly/1.0 (SecurityScan)" },
-        },
-        10000
-      );
-      // Ignore les hébergeurs qui renvoient simplement la page (ou une 404) quelle que soit la méthode.
-      const methodBody = methodRes ? await methodRes.text().catch(() => "") : "";
-      if (methodRes && isMethodReallyAccepted(methodRes.status, methodBody, html)) {
-        injectionScore -= 0.5;
-        addTest(tests, {
-          id: `method-${method.toLowerCase()}`, name: `Méthode ${method} autorisée`, category: "injection",
-          status: "warning", severity: "warning",
-          value: `La méthode HTTP ${method} retourne ${methodRes.status} — potentiellement dangereux si non protégé`,
-          recommendation: `Restreignez la méthode ${method} aux endpoints qui en ont besoin et protégez-les par authentification.`,
-          deduction: 0.5,
-        });
-      }
-    }
-
     // 5.10 DOM-based XSS : un même script inline lit une source contrôlable par l'URL
     // et utilise un sink dangereux (la simple présence d'innerHTML n'est pas une faille).
     const domSources = /location\.(hash|search|href)|document\.(URL|documentURI|referrer)|window\.name|URLSearchParams/;
@@ -1346,7 +1198,7 @@ export async function scanSecurity(targetUrl: string): Promise<SecurityScanResul
     }
 
     // 5.11 JSONP endpoint detection
-    const jsonpRes = await fetchWithTimeout(
+    const jsonpRes = await probe(
       `${targetUrl}${targetUrl.includes("?") ? "&" : "?"}callback=aifriendly_jsonp_test`,
       { headers: { "User-Agent": "AIFriendly/1.0 (SecurityScan)" } },
       10000
@@ -1435,6 +1287,8 @@ export async function scanSecurity(targetUrl: string): Promise<SecurityScanResul
     }
 
   } catch (err) {
+    // VPN indisponible ou IP refusée : ne jamais enregistrer de score à 0 pour le site.
+    if (err instanceof ScanEgressError) throw err;
     // If the scan fails entirely, return minimal result
     clearTimeout(timeout);
     return {
@@ -1458,6 +1312,8 @@ export async function scanSecurity(targetUrl: string): Promise<SecurityScanResul
   } finally {
     clearTimeout(timeout);
   }
+
+  if (egressFailures.length > 0) throw egressFailures[0];
 
   // Clamp sub-scores
   headersScore = Math.max(0, Math.min(10, Math.round(headersScore * 10) / 10));

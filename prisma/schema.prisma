@@ -87,6 +87,11 @@ model Site {
   isActive            Boolean             @default(true)
   availabilityEnabled Boolean             @default(true)
   securityEnabled     Boolean             @default(true)
+  // Preuve de propriété exigée avant tout scan de sécurité complet (lib/site-ownership.ts)
+  ownershipToken        String?
+  ownershipVerifiedAt   DateTime?
+  ownershipVerifiedHost String? // hôte couvert par la preuve : changer d'hôte l'invalide
+  ownershipMethod       String? // "dns" | "file"
   user                User                @relation(fields: [userId], references: [id], onDelete: Cascade)
   analyses            AnalysisResult[]
   availabilityChecks  AvailabilityCheck[]
@@ -161,6 +166,7 @@ model AiPentestScan {
   summary     String? // résumé court du rapport
   report      String? // rapport complet rédigé par l'agent (markdown)
   findings    Json? // liste structurée des vulnérabilités trouvées
+  coverage    Json? // v2: budgets, ressources lues, preuves masquées et limites
   error       String? // message d'erreur si status = "failed"
   site        Site      @relation(fields: [siteId], references: [id], onDelete: Cascade)
   createdAt   DateTime  @default(now())

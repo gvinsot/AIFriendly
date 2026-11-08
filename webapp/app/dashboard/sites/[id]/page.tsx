@@ -5,7 +5,9 @@ import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import type { Improvement } from "@/lib/types";
 import { useI18n } from "@/lib/i18n/context";
+import { SiteOwnershipPanel } from "@/components/SiteOwnershipPanel";
 import { Markdown } from "@/components/Markdown";
+import type { ExposureEvidence, PentestCoverage } from "@/lib/pentest-types";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -103,12 +105,15 @@ interface AiPentestFinding {
   severity: "critical" | "high" | "medium" | "low" | "info" | string;
   description: string;
   recommendation: string;
+  verification?: "confirmed" | "hypothesis";
+  evidence?: ExposureEvidence[];
 }
 
 interface AiPentestDetail extends AiPentestEntry {
   report: string | null;
   findings: AiPentestFinding[] | null;
   error: string | null;
+  coverage?: PentestCoverage | null;
 }
 
 type TabId = "ai" | "availability" | "security";
@@ -531,6 +536,7 @@ export default function SiteDetailPage() {
           dateLocale={dateLocale}
         />
       )}
+      {activeTab === "security" && <SiteOwnershipPanel siteId={siteId} />}
       {activeTab === "security" && (
         <SecurityTab
           scans={securityScans} selectedScan={selectedScan}
@@ -792,6 +798,7 @@ function SecurityTab({ scans, selectedScan, scanning, loadingDetail, onScan, onV
       />
 
       {/* Sub-scores */}
+      <p className="text-xs text-luxe-fg-muted">{t.siteDetail.security.standardScanHint}</p>
       {scans.length > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-6 gap-3">
           <MiniStat label={t.siteDetail.security.global} value={<ScoreBadge score={scans[0].score} size="sm" />} />
@@ -1016,6 +1023,23 @@ function AiPentestHistory({ pentests, selectedPentest, loadingDetail, onViewPent
                               </div>
                             )}
 
+                            {selectedPentest.coverage && (
+                              <div className="rounded-lg border border-luxe-border p-3 space-y-2 text-xs text-luxe-fg-muted">
+                                <p className="font-medium text-luxe-fg">{t.siteDetail.security.aiCoverage}</p>
+                                <p>{t.siteDetail.security.aiResources}: {selectedPentest.coverage.resources} · {t.siteDetail.security.aiRequests}: {selectedPentest.coverage.requests}/{selectedPentest.coverage.limits.requests}</p>
+                                <p>{t.siteDetail.security.aiScoreHint}</p>
+                                {selectedPentest.coverage.partial && <p className="text-luxe-score-mid">{t.siteDetail.security.aiPartial}</p>}
+                                {selectedPentest.coverage.stopReason !== "complete" && <p className="text-luxe-score-mid">{t.siteDetail.security.aiStopReasons[selectedPentest.coverage.stopReason]}</p>}
+                                <p>{selectedPentest.coverage.baselineCreatedAt ? `${t.siteDetail.security.aiBaseline}: ${new Date(selectedPentest.coverage.baselineCreatedAt).toLocaleString(dateLocale)}` : t.siteDetail.security.aiNotCompared}</p>
+                                <details>
+                                  <summary className="cursor-pointer text-luxe-gold">{t.siteDetail.security.aiAttempts}</summary>
+                                  <ul className="mt-2 space-y-1 max-h-48 overflow-auto">
+                                    {selectedPentest.coverage.attempts.map((attempt, i) => <li key={i} className="break-all"><code>{attempt.tool} {attempt.url}</code> — {attempt.status ?? "—"} · {attempt.outcome}</li>)}
+                                  </ul>
+                                </details>
+                              </div>
+                            )}
+
                             {selectedPentest.findings && selectedPentest.findings.length > 0 && (
                               <div>
                                 <h4 className="text-sm font-medium text-luxe-fg mb-2">{t.siteDetail.security.aiPentestFindings}</h4>
@@ -1025,12 +1049,23 @@ function AiPentestHistory({ pentests, selectedPentest, loadingDetail, onViewPent
                                       <PentestSeverityBadge severity={f.severity} />
                                       <div className="flex-1">
                                         <p className="text-luxe-fg font-medium">{f.title}</p>
+                                        {f.verification && (
+                                          <p className="text-xs text-luxe-gold mt-1">{f.verification === "confirmed" ? t.siteDetail.security.aiConfirmed : t.siteDetail.security.aiHypothesis}</p>
+                                        )}
                                         {f.description && <p className="text-xs text-luxe-fg-muted mt-0.5">{f.description}</p>}
                                         {f.recommendation && (
                                           <p className="text-xs text-luxe-gold mt-0.5">
                                             {t.siteDetail.security.aiPentestRecommendation} : {f.recommendation}
                                           </p>
                                         )}
+                                        {f.evidence?.map((e) => (
+                                          <div key={e.id} className="mt-2 rounded border border-luxe-border bg-luxe-bg p-3 space-y-1 text-xs">
+                                            <p className="text-luxe-fg">{t.siteDetail.security.aiEvidence} {e.id} · HTTP {e.status}</p>
+                                            <code className="block break-all text-luxe-fg-muted">{e.url}</code>
+                                            <code className="block break-all text-luxe-fg-muted">{e.sample}</code>
+                                            <p className="text-luxe-gold">{e.comparison === "additional" ? t.siteDetail.security.aiAdditional : e.comparison === "already_reported" ? t.siteDetail.security.aiAlreadyReported : t.siteDetail.security.aiNotCompared}</p>
+                                          </div>
+                                        ))}
                                       </div>
                                     </li>
                                   ))}

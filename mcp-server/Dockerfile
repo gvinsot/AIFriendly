@@ -17,6 +17,7 @@ RUN npx prisma generate --schema=./prisma/schema.prisma
 COPY webapp/lib/analyzer.ts ./lib/analyzer.ts
 COPY webapp/lib/availability-checker.ts ./lib/availability-checker.ts
 COPY webapp/lib/security-scanner.ts ./lib/security-scanner.ts
+COPY webapp/lib/site-ownership.ts ./lib/site-ownership.ts
 COPY webapp/lib/node-security.ts ./lib/node-security.ts
 COPY webapp/lib/ssrf-guard.ts ./lib/ssrf-guard.ts
 COPY webapp/lib/path-probe.ts ./lib/path-probe.ts
