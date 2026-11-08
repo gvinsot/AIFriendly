@@ -4,6 +4,7 @@ import { useState, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useI18n } from "@/lib/i18n/context";
+import { useHydrated } from "@/lib/hooks/use-hydrated";
 import { SiteFormModal } from "@/components/SiteFormModal";
 import { ScoreHistoryChart } from "./ScoreHistoryChart";
 import { PencilIcon, TrashIcon } from "@/components/Icons";
@@ -342,7 +343,7 @@ function SiteCard({
             <>
               <ScoreBadge score={site.latestAi.score} />
               <p className="text-[10px] text-luxe-fg-muted mt-1.5">
-                {formatRelativeDate(site.latestAi.createdAt, dateLocale)}
+                <RelativeDate iso={site.latestAi.createdAt} dateLocale={dateLocale} />
               </p>
             </>
           ) : (
@@ -481,6 +482,15 @@ function scoreColor(score: number): string {
   if (score >= 7) return "text-luxe-score-high bg-luxe-score-high/10";
   if (score >= 4) return "text-luxe-score-mid bg-luxe-score-mid/10";
   return "text-luxe-score-low bg-luxe-score-low/10";
+}
+
+/**
+ * Relative dates depend on the current time and the client's timezone, so they
+ * are rendered only after hydration to avoid a server/client text mismatch.
+ */
+function RelativeDate({ iso, dateLocale }: { iso: string; dateLocale: string }) {
+  const hydrated = useHydrated();
+  return <time dateTime={iso}>{hydrated ? formatRelativeDate(iso, dateLocale) : "\u00a0"}</time>;
 }
 
 function formatRelativeDate(iso: string, dateLocale: string): string {
