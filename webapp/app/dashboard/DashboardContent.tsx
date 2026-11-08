@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useI18n } from "@/lib/i18n/context";
 import { SiteFormModal } from "@/components/SiteFormModal";
 import { ScoreHistoryChart } from "./ScoreHistoryChart";
+import { PencilIcon, TrashIcon } from "@/components/Icons";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -307,17 +308,19 @@ function SiteCard({
           )}
           <button
             onClick={onEdit}
-            className="rounded-lg border border-luxe-border text-luxe-fg-muted px-2.5 py-1.5 text-[10px] hover:bg-luxe-bg-muted transition-colors"
+            className="rounded-lg border border-luxe-border text-luxe-fg-muted p-1.5 hover:bg-luxe-bg-muted transition-colors"
             title={t.common.edit}
+            aria-label={t.common.edit}
           >
-            {t.common.edit}
+            <PencilIcon className="h-3.5 w-3.5" />
           </button>
           <button
             onClick={onDelete}
-            className="rounded-lg border border-luxe-score-low/30 text-luxe-score-low px-2.5 py-1.5 text-[10px] hover:bg-luxe-score-low/10 transition-colors"
+            className="rounded-lg border border-luxe-score-low/30 text-luxe-score-low p-1.5 hover:bg-luxe-score-low/10 transition-colors"
             title={t.common.delete}
+            aria-label={t.common.delete}
           >
-            {t.common.delete}
+            <TrashIcon className="h-3.5 w-3.5" />
           </button>
         </div>
       </div>

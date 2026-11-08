@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useI18n } from "@/lib/i18n/context";
 import { SiteFormModal } from "@/components/SiteFormModal";
+import { PencilIcon, TrashIcon } from "@/components/Icons";
 
 interface Site {
   id: string;
@@ -204,15 +205,19 @@ export default function SitesPage() {
                 </Link>
                 <button
                   onClick={() => startEdit(site)}
-                  className="rounded-lg border border-luxe-border text-luxe-fg-muted px-3 py-1.5 text-xs hover:bg-luxe-bg-muted transition-colors"
+                  className="rounded-lg border border-luxe-border text-luxe-fg-muted p-2 hover:bg-luxe-bg-muted transition-colors"
+                  title={t.common.edit}
+                  aria-label={t.common.edit}
                 >
-                  {t.common.edit}
+                  <PencilIcon />
                 </button>
                 <button
                   onClick={() => handleDelete(site.id)}
-                  className="rounded-lg border border-luxe-score-low/30 text-luxe-score-low px-3 py-1.5 text-xs hover:bg-luxe-score-low/10 transition-colors"
+                  className="rounded-lg border border-luxe-score-low/30 text-luxe-score-low p-2 hover:bg-luxe-score-low/10 transition-colors"
+                  title={t.common.delete}
+                  aria-label={t.common.delete}
                 >
-                  {t.common.delete}
+                  <TrashIcon />
                 </button>
               </div>
             </div>

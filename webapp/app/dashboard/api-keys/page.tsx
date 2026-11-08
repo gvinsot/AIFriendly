@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { useI18n } from "@/lib/i18n/context";
+import { TrashIcon } from "@/components/Icons";
 
 interface ApiKeyItem {
   id: string;
@@ -214,9 +215,11 @@ export default function ApiKeysPage() {
               </div>
               <button
                 onClick={() => handleDelete(k.id)}
-                className="ml-4 text-xs text-red-400 hover:text-red-300 transition-colors border border-red-400/20 hover:border-red-400/40 rounded-lg px-3 py-1.5"
+                className="ml-4 text-xs text-red-400 hover:text-red-300 transition-colors border border-red-400/20 hover:border-red-400/40 rounded-lg p-2"
+                title={t.common.delete}
+                aria-label={t.common.delete}
               >
-                {t.common.delete}
+                <TrashIcon />
               </button>
             </div>
           ))}
