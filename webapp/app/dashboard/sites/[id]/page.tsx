@@ -754,13 +754,25 @@ function SecurityTab({ scans, selectedScan, scanning, loadingDetail, onScan, onV
     injection: t.siteDetail.security.catInjection,
   };
 
+  // Un pentest déjà en attente ("queued") ou en cours ("running") bloque un
+  // nouveau clic : la file est séquentielle, inutile d'en empiler un autre.
+  const pentestPending = pentests.some((p) => p.status === "queued" || p.status === "running");
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="font-display text-lg font-semibold text-luxe-fg">{t.siteDetail.security.title}</h2>
         <div className="flex items-center gap-2">
           <ActionButton loading={scanning} onClick={onScan} label={t.siteDetail.security.scanButton} loadingLabel={t.siteDetail.security.scanningButton} />
-          <ActionButton loading={pentesting} onClick={onAiPentest} label={t.siteDetail.security.aiScanButton} loadingLabel={t.siteDetail.security.aiScanningButton} variant="gold" />
+          <ActionButton
+            loading={pentesting}
+            onClick={onAiPentest}
+            label={t.siteDetail.security.aiScanButton}
+            loadingLabel={t.siteDetail.security.aiScanningButton}
+            variant="gold"
+            disabled={pentestPending}
+            disabledLabel={t.siteDetail.security.aiScanPendingButton}
+          />
         </div>
       </div>
 
@@ -1048,20 +1060,23 @@ function AiPentestHistory({ pentests, selectedPentest, loadingDetail, onViewPent
 // SHARED UI COMPONENTS
 // ═══════════════════════════════════════════════════════════════════════════
 
-function ActionButton({ loading, onClick, label, loadingLabel, variant = "outline" }: { loading: boolean; onClick: () => void; label: string; loadingLabel: string; variant?: "outline" | "gold" }) {
+function ActionButton({ loading, onClick, label, loadingLabel, variant = "outline", disabled = false, disabledLabel }: { loading: boolean; onClick: () => void; label: string; loadingLabel: string; variant?: "outline" | "gold"; disabled?: boolean; disabledLabel?: string }) {
   const cls =
     variant === "gold"
-      ? "rounded-lg border border-luxe-gold bg-luxe-gold text-luxe-bg px-5 py-2.5 text-sm font-medium hover:bg-luxe-gold/90 disabled:opacity-50 transition-colors"
-      : "rounded-lg border border-luxe-gold bg-luxe-gold/10 text-luxe-gold px-5 py-2.5 text-sm font-medium hover:bg-luxe-gold/20 disabled:opacity-50 transition-colors";
+      ? "rounded-lg border border-luxe-gold bg-luxe-gold text-luxe-bg px-5 py-2.5 text-sm font-medium hover:bg-luxe-gold/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+      : "rounded-lg border border-luxe-gold bg-luxe-gold/10 text-luxe-gold px-5 py-2.5 text-sm font-medium hover:bg-luxe-gold/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors";
   const spinnerColor = variant === "gold" ? "border-luxe-bg" : "border-luxe-gold";
+  // Désactivé « en cours » (ex. scan déjà programmé) : on garde le spinner et un libellé dédié.
+  const showSpinner = loading || (disabled && !!disabledLabel);
+  const content = loading ? loadingLabel : disabled && disabledLabel ? disabledLabel : label;
   return (
-    <button onClick={onClick} disabled={loading} className={cls}>
-      {loading ? (
+    <button onClick={onClick} disabled={loading || disabled} className={cls}>
+      {showSpinner ? (
         <span className="inline-flex items-center gap-2">
           <span className={`size-3 rounded-full border-2 ${spinnerColor} border-t-transparent animate-spin`} />
-          {loadingLabel}
+          {content}
         </span>
-      ) : label}
+      ) : content}
     </button>
   );
 }

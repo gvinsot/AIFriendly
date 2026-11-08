@@ -286,6 +286,7 @@ const de: Dictionary = {
       catInjection: "Injection / XSS",
       aiScanButton: "Erweiterter KI-Pentest",
       aiScanningButton: "KI-Analyse…",
+      aiScanPendingButton: "Scan läuft…",
       aiPentestHistory: "KI-Pentests (Agent)",
       aiPentestHistoryHint:
         "Der Agent versucht einen Einbruch und erstellt einen Bericht — sequenzielle Ausführung",

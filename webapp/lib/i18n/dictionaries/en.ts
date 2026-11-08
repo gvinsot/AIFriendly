@@ -286,6 +286,7 @@ const en: Dictionary = {
       catInjection: "Injection / XSS",
       aiScanButton: "Advanced AI Scan",
       aiScanningButton: "AI analysis…",
+      aiScanPendingButton: "Scan in progress…",
       aiPentestHistory: "AI pentests (agent)",
       aiPentestHistoryHint:
         "The agent attempts an intrusion and writes a report — runs sequentially",

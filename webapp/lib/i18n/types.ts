@@ -279,6 +279,7 @@ export interface Dictionary {
       catInjection: string;
       aiScanButton: string;
       aiScanningButton: string;
+      aiScanPendingButton: string;
       aiPentestHistory: string;
       aiPentestHistoryHint: string;
       aiPentestNoScan: string;
