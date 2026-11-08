@@ -16,6 +16,10 @@
   --luxe-score-high: #34d399;
   --luxe-score-mid: #fbbf24;
   --luxe-score-low: #f87171;
+  /* RGB channels for Tailwind opacity modifiers (e.g. bg-luxe-score-low/15) */
+  --luxe-score-high-rgb: 52 211 153;
+  --luxe-score-mid-rgb: 251 191 36;
+  --luxe-score-low-rgb: 248 113 113;
 }
 
 @media (prefers-color-scheme: light) {
@@ -32,6 +36,9 @@
     --luxe-score-high: #059669;
     --luxe-score-mid: #d97706;
     --luxe-score-low: #dc2626;
+    --luxe-score-high-rgb: 5 150 105;
+    --luxe-score-mid-rgb: 217 119 6;
+    --luxe-score-low-rgb: 220 38 38;
   }
 }
 

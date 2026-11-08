@@ -272,7 +272,7 @@ export default function Home() {
                   {value !== null && value !== undefined ? (
                     <div className="flex items-baseline justify-center gap-1.5">
                       <span className={`font-display text-4xl font-semibold tabular-nums tracking-tight ${
-                        value >= 7 ? "text-[var(--luxe-score-high)]" : value >= 4 ? "text-[var(--luxe-score-mid)]" : "text-[var(--luxe-score-low)]"
+                        value >= 7 ? "text-luxe-score-high" : value >= 4 ? "text-luxe-score-mid" : "text-luxe-score-low"
                       }`}>
                         {value}
                       </span>
@@ -327,7 +327,7 @@ export default function Home() {
                   key={i}
                   className={`rounded-xl border border-luxe-border bg-luxe-bg-elevated/80 p-6 animate-fade-in-up animation-delay-${(i + 1) * 100}`}
                 >
-                  <div className="w-10 h-10 rounded-lg bg-luxe-score-low/10 text-[var(--luxe-score-low)] flex items-center justify-center mb-4">
+                  <div className="w-10 h-10 rounded-lg bg-luxe-score-low/10 text-luxe-score-low flex items-center justify-center mb-4">
                     <Icon />
                   </div>
                   <h3 className="font-semibold text-luxe-fg mb-2">{card.title}</h3>
@@ -410,9 +410,9 @@ export default function Home() {
 {"{"}{"\n"}
 {"  "}<span className="text-luxe-gold">&quot;mcpServers&quot;</span>: {"{"}{"\n"}
 {"    "}<span className="text-luxe-gold">&quot;aifriendly&quot;</span>: {"{"}{"\n"}
-{"      "}<span className="text-[#a855f7]">&quot;url&quot;</span>: <span className="text-[var(--luxe-score-high)]">&quot;https://mcp.aifriendly.eu/mcp&quot;</span>,{"\n"}
+{"      "}<span className="text-[#a855f7]">&quot;url&quot;</span>: <span className="text-luxe-score-high">&quot;https://mcp.aifriendly.eu/mcp&quot;</span>,{"\n"}
 {"      "}<span className="text-[#a855f7]">&quot;headers&quot;</span>: {"{"}{"\n"}
-{"        "}<span className="text-[#a855f7]">&quot;x-api-key&quot;</span>: <span className="text-[var(--luxe-score-mid)]">&quot;your-api-key&quot;</span>{"\n"}
+{"        "}<span className="text-[#a855f7]">&quot;x-api-key&quot;</span>: <span className="text-luxe-score-mid">&quot;your-api-key&quot;</span>{"\n"}
 {"      }"}{"\n"}
 {"    }"}{"\n"}
 {"  }"}{"\n"}
@@ -499,8 +499,8 @@ export default function Home() {
 function ImprovementItem({ item }: { item: Improvement }) {
   const { t } = useI18n();
   const severityStyles = {
-    critical: "bg-[var(--luxe-score-low)]/15 text-[var(--luxe-score-low)] border border-[var(--luxe-score-low)]/20",
-    warning: "bg-[var(--luxe-score-mid)]/15 text-[var(--luxe-score-mid)] border border-[var(--luxe-score-mid)]/20",
+    critical: "bg-luxe-score-low/15 text-luxe-score-low border border-luxe-score-low/20",
+    warning: "bg-luxe-score-mid/15 text-luxe-score-mid border border-luxe-score-mid/20",
     info: "bg-luxe-gold/10 text-luxe-gold-muted border border-luxe-border",
   };
   return (

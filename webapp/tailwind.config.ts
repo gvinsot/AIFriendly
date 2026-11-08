@@ -24,6 +24,10 @@ const config: Config = {
           "gold-muted": "var(--luxe-gold-muted)",
           border: "var(--luxe-border)",
           "border-focus": "var(--luxe-border-focus)",
+          // Status colors: green (success), orange (warning), red (failed/critical)
+          "score-high": "rgb(var(--luxe-score-high-rgb) / <alpha-value>)",
+          "score-mid": "rgb(var(--luxe-score-mid-rgb) / <alpha-value>)",
+          "score-low": "rgb(var(--luxe-score-low-rgb) / <alpha-value>)",
         },
       },
       boxShadow: {
