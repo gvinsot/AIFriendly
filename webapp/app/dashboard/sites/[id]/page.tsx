@@ -5,6 +5,7 @@ import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import type { Improvement } from "@/lib/types";
 import { useI18n } from "@/lib/i18n/context";
+import { Markdown } from "@/components/Markdown";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -1036,9 +1037,9 @@ function AiPentestHistory({ pentests, selectedPentest, loadingDetail, onViewPent
                             {selectedPentest.report && (
                               <div>
                                 <h4 className="text-sm font-medium text-luxe-fg mb-2">{t.siteDetail.security.aiPentestReport}</h4>
-                                <pre className="text-xs font-mono text-luxe-fg-muted bg-luxe-bg rounded-lg border border-luxe-border p-4 overflow-auto max-h-96 whitespace-pre-wrap preview-scroll">
-                                  {selectedPentest.report}
-                                </pre>
+                                <div className="text-xs text-luxe-fg-muted bg-luxe-bg rounded-lg border border-luxe-border p-4 overflow-auto max-h-96 preview-scroll">
+                                  <Markdown content={selectedPentest.report} />
+                                </div>
                               </div>
                             )}
                           </>
