@@ -31,6 +31,7 @@ export interface Dictionary {
     analyze: string;
     analyzing: string;
     severity: { critical: string; warning: string; info: string };
+    status: { pass: string; warning: string; fail: string };
     frequency: {
       "6h": string;
       daily: string;

@@ -21,6 +21,7 @@ const en: Dictionary = {
     analyze: "Analyze",
     analyzing: "Analyzing…",
     severity: { critical: "Critical", warning: "Warning", info: "Info" },
+    status: { pass: "Success", warning: "Warning", fail: "Failed" },
     frequency: {
       "6h": "Every 6h",
       daily: "Daily",

@@ -1142,9 +1142,24 @@ function SeverityBadge({ severity }: { severity: "critical" | "warning" | "info"
   );
 }
 
+// Pastille colorée d'état d'un test (réussi = vert, avertissement = orange,
+// échec = rouge). Un libellé explicite accompagne la couleur pour une
+// identification immédiate.
 function StatusDot({ status }: { status: string }) {
-  const color = status === "pass" ? "bg-luxe-score-high" : status === "warning" ? "bg-luxe-score-mid" : "bg-luxe-score-low";
-  return <span className={`inline-block size-2 rounded-full ${color} mt-1.5 shrink-0`} />;
+  const { t } = useI18n();
+  const map: Record<string, { label: string; cls: string }> = {
+    pass: { label: t.common.status.pass, cls: "bg-luxe-score-high/15 text-luxe-score-high border-luxe-score-high/30" },
+    warning: { label: t.common.status.warning, cls: "bg-luxe-score-mid/15 text-luxe-score-mid border-luxe-score-mid/30" },
+    fail: { label: t.common.status.fail, cls: "bg-luxe-score-low/15 text-luxe-score-low border-luxe-score-low/30" },
+  };
+  const s = map[status] || map.fail;
+  const dotColor = status === "pass" ? "bg-luxe-score-high" : status === "warning" ? "bg-luxe-score-mid" : "bg-luxe-score-low";
+  return (
+    <span className={`mt-0.5 inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-semibold border shrink-0 ${s.cls}`}>
+      <span className={`size-1.5 rounded-full ${dotColor}`} />
+      {s.label}
+    </span>
+  );
 }
 
 function MiniStat({ label, value }: { label: string; value: React.ReactNode }) {
