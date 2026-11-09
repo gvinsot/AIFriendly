@@ -322,6 +322,22 @@ export class ScanEgressError extends Error {
   }
 }
 
+/**
+ * Message affiché quand le site refuse l'IP de sortie du VPN. Le fournisseur VPN
+ * répartit les connexions sur plusieurs serveurs (DNS tournant) : selon l'IP de
+ * sortie obtenue, un même site peut bloquer un scan et laisser passer le suivant.
+ */
+export const WAF_BLOCKED_MESSAGE =
+  "Le site a refusé l'IP de sortie du VPN (WAF ou anti-bot) : aucun score n'a été calculé. Réessayez plus tard ou autorisez le User-Agent AIFriendly.";
+
+const WAF_BLOCK_RE = /just a moment|attention required|captcha|access denied|request blocked|ddos[- ]protection|ddos-guard|incapsula|sucuri|forbidden/i;
+
+/** La réponse ressemble à un refus de l'IP de sortie du VPN plutôt qu'à la vraie page. */
+export function looksBlockedByWaf(status: number, headers: Headers, html: string): boolean {
+  if (status !== 403 && status !== 429 && status !== 503) return false;
+  return headers.has("cf-mitigated") || WAF_BLOCK_RE.test(html.slice(0, 20_000));
+}
+
 /** Le proxy fonctionne, mais la cible n'a pas pu être jointe à cette adresse. */
 class SocksTargetError extends Error {}
 

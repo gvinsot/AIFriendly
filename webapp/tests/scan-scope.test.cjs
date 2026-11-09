@@ -7,11 +7,16 @@ class ScanEgressError extends Error {
   constructor(reason, message) { super(message); this.reason = reason; }
 }
 
+// Real WAF helpers, loaded before the stub replaces the module.
+const { looksBlockedByWaf, WAF_BLOCKED_MESSAGE } = require('../lib/ssrf-guard.ts');
+
 let requests = [];
 let proxied = false;
 let respond = () => null;
 const stub = {
   ScanEgressError,
+  looksBlockedByWaf,
+  WAF_BLOCKED_MESSAGE,
   isScanProxied: () => proxied,
   scanFetch: async (input, init = {}) => {
     const url = new URL(input);

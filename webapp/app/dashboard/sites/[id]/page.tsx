@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import type { Improvement } from "@/lib/types";
@@ -95,6 +95,8 @@ interface AiPentestEntry {
   status: "queued" | "running" | "done" | "failed" | string;
   score: number | null;
   summary: string | null;
+  /** Raison d'un échec (VPN injoignable, IP refusée par le WAF, propriété…). */
+  error?: string | null;
   createdAt: string;
   startedAt: string | null;
   completedAt: string | null;
@@ -331,6 +333,22 @@ export default function SiteDetailPage() {
     { id: "security", label: t.siteDetail.tabs.security },
   ];
 
+  // Pentests vus en attente/en cours : s'ils échouent, leur message d'erreur est
+  // affiché comme celui du scan standard (le pentest tourne en arrière-plan,
+  // l'erreur n'arrive donc pas dans la réponse du clic).
+  const watchedPentests = useRef(new Set<string>());
+  const genericPentestError = t.siteDetail.security.aiPentestError;
+
+  const trackPentests = useCallback((list: AiPentestEntry[]) => {
+    for (const p of list) {
+      if (p.status === "queued" || p.status === "running") {
+        watchedPentests.current.add(p.id);
+      } else if (watchedPentests.current.delete(p.id) && p.status === "failed") {
+        setError(p.error || genericPentestError);
+      }
+    }
+  }, [genericPentestError]);
+
   const fetchData = useCallback(async () => {
     try {
       const [siteRes, historyRes, availRes, secRes, pentestRes] = await Promise.all([
@@ -344,11 +362,15 @@ export default function SiteDetailPage() {
       if (historyRes.ok) setAnalyses(await historyRes.json());
       if (availRes.ok) setAvailChecks(await availRes.json());
       if (secRes.ok) setSecurityScans(await secRes.json());
-      if (pentestRes.ok) setAiPentests(await pentestRes.json());
+      if (pentestRes.ok) {
+        const list: AiPentestEntry[] = await pentestRes.json();
+        trackPentests(list);
+        setAiPentests(list);
+      }
     } finally {
       setLoading(false);
     }
-  }, [siteId]);
+  }, [siteId, trackPentests]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -356,9 +378,13 @@ export default function SiteDetailPage() {
   const refreshPentests = useCallback(async () => {
     try {
       const res = await fetch(`/api/sites/${siteId}/security/ai-pentest`);
-      if (res.ok) setAiPentests(await res.json());
+      if (res.ok) {
+        const list: AiPentestEntry[] = await res.json();
+        trackPentests(list);
+        setAiPentests(list);
+      }
     } catch { /* ignore */ }
-  }, [siteId]);
+  }, [siteId, trackPentests]);
 
   // Tant qu'un pentest est en attente ou en cours, on poll pour voir son avancement.
   const hasPendingPentest = aiPentests.some(
@@ -429,6 +455,7 @@ export default function SiteDetailPage() {
       // Feedback immédiat : on insère/actualise la demande en tête de liste.
       if (data && "id" in data && data.id) {
         const entry = data as AiPentestEntry;
+        if (entry.status === "queued" || entry.status === "running") watchedPentests.current.add(entry.id);
         setAiPentests((prev) => [entry, ...prev.filter((p) => p.id !== entry.id)]);
       }
       await refreshPentests();
@@ -985,7 +1012,7 @@ function AiPentestHistory({ pentests, selectedPentest, loadingDetail, onViewPent
                         {new Date(p.createdAt).toLocaleTimeString(dateLocale, { hour: "2-digit", minute: "2-digit" })}
                       </p>
                       <p className="text-xs text-luxe-fg-muted truncate">
-                        {p.summary || (pending ? t.siteDetail.security.statusRunning : "—")}
+                        {p.summary || (pending ? t.siteDetail.security.statusRunning : p.status === "failed" && p.error ? p.error : "—")}
                       </p>
                     </div>
                   </div>

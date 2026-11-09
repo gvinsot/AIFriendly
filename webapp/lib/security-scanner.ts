@@ -12,7 +12,7 @@
  */
 
 import * as cheerio from "cheerio";
-import { ScanEgressError, isScanProxied, scanFetch, type SafeFetchOptions } from "./ssrf-guard";
+import { ScanEgressError, WAF_BLOCKED_MESSAGE, isScanProxied, looksBlockedByWaf, scanFetch, type SafeFetchOptions } from "./ssrf-guard";
 import { detectAdminPanels } from "./admin-panel-detection";
 import {
   API_DOC_PATHS,
@@ -73,14 +73,6 @@ async function fetchWithTimeout(url: string, options: SafeFetchOptions = {}, tim
  */
 export type ScanDepth = "full" | "passive";
 
-const WAF_BLOCK_RE = /just a moment|attention required|captcha|access denied|request blocked|ddos[- ]protection|ddos-guard|incapsula|sucuri|forbidden/i;
-
-/** La réponse ressemble à un refus de l'IP de sortie du VPN plutôt qu'à la vraie page. */
-function looksBlockedByWaf(status: number, headers: Headers, html: string): boolean {
-  if (status !== 403 && status !== 429 && status !== 503) return false;
-  return headers.has("cf-mitigated") || WAF_BLOCK_RE.test(html.slice(0, 20_000));
-}
-
 function addTest(tests: SecurityTestResult[], test: SecurityTestResult) {
   tests.push(test);
 }
@@ -140,10 +132,7 @@ export async function scanSecurity(targetUrl: string, options: { depth: ScanDept
     const html = await res.text();
     // Noter la page de blocage du WAF donnerait un score sans rapport avec le site.
     if (isScanProxied() && looksBlockedByWaf(res.status, headers, html)) {
-      throw new ScanEgressError(
-        "blocked",
-        "Le site a refusé l'IP de sortie du VPN (WAF ou anti-bot) : aucun score n'a été calculé. Réessayez plus tard ou autorisez le User-Agent AIFriendly."
-      );
+      throw new ScanEgressError("blocked", WAF_BLOCKED_MESSAGE);
     }
     const $ = cheerio.load(html);
     // URL finale après redirections : c'est elle qui détermine si la page est servie en HTTPS.
